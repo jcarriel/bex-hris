@@ -304,6 +304,5 @@ cd /home/jacarriel/Repositories/BEX-HRIS/frontend && npx netlify deploy --prod -
 
 Despliegue Netlify BackEnd
 cd /home/jacarriel/Repositories/BEX-HRIS/backend && npm run build 2>&1 | tail -50
-cd /home/jacarriel/Repositories/BEX-HRIS/backend && npx netlify sites:create --name bex-hris-backend
-cd /home/jacarriel/Repositories/BEX-HRIS/backend && npx netlify deploy --prod --dir=build
+
 
