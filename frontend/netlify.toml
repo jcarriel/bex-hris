@@ -1,0 +1,16 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
+  REACT_APP_API_URL = "https://bex-hris-api.herokuapp.com/api"
+  REACT_APP_APP_NAME = "BEX HRIS"
+
+[context.deploy-preview.environment]
+  REACT_APP_API_URL = "http://localhost:3000/api"
+  REACT_APP_APP_NAME = "BEX HRIS"
