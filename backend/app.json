@@ -1,0 +1,62 @@
+{
+  "name": "BEX HRIS Backend",
+  "description": "Backend para el Sistema de Información de Recursos Humanos",
+  "repository": "https://github.com/jcarriel/bex-hris",
+  "keywords": ["node", "express", "hris", "payroll"],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "env": {
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "description": "JWT secret key",
+      "value": "8ea4a8ce09c9775422df9ae4997dae0c"
+    },
+    "RESEND_API_KEY": {
+      "description": "Resend API key for email",
+      "value": "re_Vdd7JNhq_HBZe5gxqS4v6qzTg5cZ7actj"
+    },
+    "EMAIL_FROM": {
+      "description": "Email sender address",
+      "value": "onboarding@resend.dev"
+    },
+    "DATABASE_PATH": {
+      "description": "Database path",
+      "value": "./data/hris.db"
+    },
+    "UPLOAD_DIR": {
+      "description": "Upload directory",
+      "value": "./uploads"
+    },
+    "MAX_FILE_SIZE": {
+      "description": "Max file size in bytes",
+      "value": "10485760"
+    },
+    "ENABLE_EMAIL_NOTIFICATIONS": {
+      "description": "Enable email notifications",
+      "value": "true"
+    },
+    "ENABLE_APP_NOTIFICATIONS": {
+      "description": "Enable app notifications",
+      "value": "true"
+    },
+    "NOTIFICATION_CHECK_INTERVAL": {
+      "description": "Notification check interval in ms",
+      "value": "3600000"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "free"
+    }
+  },
+  "scripts": {
+    "postbuild": "npm run build"
+  }
+}
