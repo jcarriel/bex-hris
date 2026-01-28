@@ -8,7 +8,7 @@
   status = 200
 
 [context.production.environment]
-  REACT_APP_API_URL = "https://bex-hris-api.herokuapp.com/api"
+  REACT_APP_API_URL = "https://bex-hris-backend-d78b25920124.herokuapp.com/api"
   REACT_APP_APP_NAME = "BEX HRIS"
 
 [context.deploy-preview.environment]
