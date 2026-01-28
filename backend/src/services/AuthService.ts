@@ -57,8 +57,8 @@ export class AuthService {
         },
         process.env.JWT_SECRET || 'secret',
         {
-          expiresIn: process.env.JWT_EXPIRATION || '7d',
-        }
+          expiresIn: (process.env.JWT_EXPIRATION || '7d') as string | number,
+        } as any
       );
 
       logger.info(`User logged in: ${username}`);
