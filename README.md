@@ -303,7 +303,7 @@ cd /home/jacarriel/Repositories/BEX-HRIS/frontend && npx netlify deploy --prod -
 
 
 Despliegue Heroku BackEnd
-cd /home/jacarriel/Repositories/BEX-HRIS && git add . && git commit -m "Configure CORS with explicit headers and methods" && git push origin main
-cd /home/jacarriel/Repositories/BEX-HRIS && git subtree push --prefix backend heroku main
+cd /home/jacarriel/Repositories/BEX-HRIS && git add . && git commit -m "Mejoras en el frontend" && git push origin main
+cd /home/jacarriel/Repositories/BEX-HRIS && git push heroku `git subtree split --prefix backend HEAD`:main --force 2>&1 | tail -100
 
 

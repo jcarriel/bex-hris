@@ -332,7 +332,7 @@ const generatePayrollPDFContent = (payroll: PayrollData, companyName: string = '
 
         <div class="net-pay-section">
           <div class="net-pay-label">Total a Recibir</div>
-          <div class="net-pay-value">$${payroll.totalToPay.toFixed(2)}</div>
+          <div class="net-pay-value">$${calculatedTotalToPay.toFixed(2)}</div>
         </div>
 
         <div class="signature-section">
