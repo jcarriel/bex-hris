@@ -126,140 +126,255 @@ export default function SearchFilter({
 
       {showFilters && (
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '15px',
           paddingTop: '15px',
           borderTop: `1px solid ${theme === 'light' ? '#eee' : '#374151'}`,
         }}>
-          {filters.map((filter) => (
-            <div key={filter.id}>
-              <label style={{
-                display: 'block',
-                marginBottom: '5px',
-                color: theme === 'light' ? '#555' : '#d1d5db',
-                fontSize: '12px',
-                fontWeight: 'bold',
-              }}>
-                {filter.label}
-              </label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '15px',
+            marginBottom: '15px',
+          }}>
+            {filters.slice(0, 4).map((filter) => (
+              <div key={filter.id}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '6px',
+                  color: theme === 'light' ? '#555' : '#d1d5db',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  letterSpacing: '0.5px',
+                }}>
+                  {filter.label}
+                </label>
 
-              {filter.type === 'text' && (
-                <input
-                  type="text"
-                  placeholder={filter.placeholder}
-                  value={filterValues[filter.id] || ''}
-                  onChange={(e) => handleFilterChange(filter.id, e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                    borderRadius: '5px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box',
-                    background: theme === 'light' ? 'white' : '#374151',
-                    color: theme === 'light' ? '#333' : '#e5e7eb',
-                  }}
-                />
-              )}
-
-              {filter.type === 'select' && (
-                <select
-                  value={filterValues[filter.id] || ''}
-                  onChange={(e) => handleFilterChange(filter.id, e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                    borderRadius: '5px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box',
-                    background: theme === 'light' ? 'white' : '#374151',
-                    color: theme === 'light' ? '#333' : '#e5e7eb',
-                  }}
-                >
-                  <option value="">Todos</option>
-                  {filter.options?.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {filter.type === 'date' && (
-                <input
-                  type="date"
-                  value={filterValues[filter.id] || ''}
-                  onChange={(e) => handleFilterChange(filter.id, e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                    borderRadius: '5px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box',
-                    background: theme === 'light' ? 'white' : '#374151',
-                    color: theme === 'light' ? '#333' : '#e5e7eb',
-                  }}
-                />
-              )}
-
-              {filter.type === 'number' && (
-                <input
-                  type="number"
-                  placeholder={filter.placeholder}
-                  value={filterValues[filter.id] || ''}
-                  onChange={(e) => handleFilterChange(filter.id, e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                    borderRadius: '5px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box',
-                    background: theme === 'light' ? 'white' : '#374151',
-                    color: theme === 'light' ? '#333' : '#e5e7eb',
-                  }}
-                />
-              )}
-
-              {filter.type === 'range' && (
-                <div style={{ display: 'flex', gap: '5px' }}>
+                {filter.type === 'text' && (
                   <input
-                    type="number"
-                    placeholder="Min"
-                    value={filterValues[`${filter.id}_min`] || ''}
-                    onChange={(e) => handleFilterChange(`${filter.id}_min`, e.target.value)}
+                    type="text"
+                    placeholder={filter.placeholder}
+                    value={filterValues[filter.id] || ''}
+                    onChange={(e) => handleFilterChange(filter.id, e.target.value)}
                     style={{
-                      flex: 1,
-                      padding: '8px',
+                      width: '100%',
+                      padding: '8px 10px',
                       border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
                       borderRadius: '5px',
-                      fontSize: '14px',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
                       background: theme === 'light' ? 'white' : '#374151',
                       color: theme === 'light' ? '#333' : '#e5e7eb',
+                      transition: 'border-color 0.2s',
                     }}
                   />
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={filterValues[`${filter.id}_max`] || ''}
-                    onChange={(e) => handleFilterChange(`${filter.id}_max`, e.target.value)}
+                )}
+
+                {filter.type === 'select' && (
+                  <select
+                    value={filterValues[filter.id] || ''}
+                    onChange={(e) => handleFilterChange(filter.id, e.target.value)}
                     style={{
-                      flex: 1,
-                      padding: '8px',
+                      width: '100%',
+                      padding: '8px 10px',
                       border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
                       borderRadius: '5px',
-                      fontSize: '14px',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
                       background: theme === 'light' ? 'white' : '#374151',
                       color: theme === 'light' ? '#333' : '#e5e7eb',
+                      transition: 'border-color 0.2s',
+                    }}
+                  >
+                    <option value="">Todos</option>
+                    {filter.options?.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {filter.type === 'date' && (
+                  <input
+                    type="date"
+                    value={filterValues[filter.id] || ''}
+                    onChange={(e) => handleFilterChange(filter.id, e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                      borderRadius: '5px',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                      background: theme === 'light' ? 'white' : '#374151',
+                      color: theme === 'light' ? '#333' : '#e5e7eb',
+                      transition: 'border-color 0.2s',
                     }}
                   />
+                )}
+
+                {filter.type === 'range' && (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={filterValues[`${filter.id}_min`] || ''}
+                      onChange={(e) => handleFilterChange(`${filter.id}_min`, e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                        borderRadius: '5px',
+                        fontSize: '13px',
+                        background: theme === 'light' ? 'white' : '#374151',
+                        color: theme === 'light' ? '#333' : '#e5e7eb',
+                        transition: 'border-color 0.2s',
+                      }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={filterValues[`${filter.id}_max`] || ''}
+                      onChange={(e) => handleFilterChange(`${filter.id}_max`, e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                        borderRadius: '5px',
+                        fontSize: '13px',
+                        background: theme === 'light' ? 'white' : '#374151',
+                        color: theme === 'light' ? '#333' : '#e5e7eb',
+                        transition: 'border-color 0.2s',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {filters.length > 4 && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '15px',
+            }}>
+              {filters.slice(4).map((filter) => (
+                <div key={filter.id}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    color: theme === 'light' ? '#555' : '#d1d5db',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    letterSpacing: '0.5px',
+                  }}>
+                    {filter.label}
+                  </label>
+
+                  {filter.type === 'text' && (
+                    <input
+                      type="text"
+                      placeholder={filter.placeholder}
+                      value={filterValues[filter.id] || ''}
+                      onChange={(e) => handleFilterChange(filter.id, e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                        borderRadius: '5px',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                        background: theme === 'light' ? 'white' : '#374151',
+                        color: theme === 'light' ? '#333' : '#e5e7eb',
+                        transition: 'border-color 0.2s',
+                      }}
+                    />
+                  )}
+
+                  {filter.type === 'select' && (
+                    <select
+                      value={filterValues[filter.id] || ''}
+                      onChange={(e) => handleFilterChange(filter.id, e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                        borderRadius: '5px',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                        background: theme === 'light' ? 'white' : '#374151',
+                        color: theme === 'light' ? '#333' : '#e5e7eb',
+                        transition: 'border-color 0.2s',
+                      }}
+                    >
+                      <option value="">Todos</option>
+                      {filter.options?.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {filter.type === 'date' && (
+                    <input
+                      type="date"
+                      value={filterValues[filter.id] || ''}
+                      onChange={(e) => handleFilterChange(filter.id, e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                        borderRadius: '5px',
+                        fontSize: '13px',
+                        boxSizing: 'border-box',
+                        background: theme === 'light' ? 'white' : '#374151',
+                        color: theme === 'light' ? '#333' : '#e5e7eb',
+                        transition: 'border-color 0.2s',
+                      }}
+                    />
+                  )}
+
+                  {filter.type === 'range' && (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="number"
+                        placeholder="Min"
+                        value={filterValues[`${filter.id}_min`] || ''}
+                        onChange={(e) => handleFilterChange(`${filter.id}_min`, e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: '8px 10px',
+                          border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                          borderRadius: '5px',
+                          fontSize: '13px',
+                          background: theme === 'light' ? 'white' : '#374151',
+                          color: theme === 'light' ? '#333' : '#e5e7eb',
+                          transition: 'border-color 0.2s',
+                        }}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Max"
+                        value={filterValues[`${filter.id}_max`] || ''}
+                        onChange={(e) => handleFilterChange(`${filter.id}_max`, e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: '8px 10px',
+                          border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+                          borderRadius: '5px',
+                          fontSize: '13px',
+                          background: theme === 'light' ? 'white' : '#374151',
+                          color: theme === 'light' ? '#333' : '#e5e7eb',
+                          transition: 'border-color 0.2s',
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

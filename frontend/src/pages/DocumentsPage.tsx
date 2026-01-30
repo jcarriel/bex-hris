@@ -188,13 +188,17 @@ export default function DocumentsPage() {
           onClick={() => setShowForm(!showForm)}
           style={{
             padding: '10px 20px',
-            background: '#667eea',
+            background: '#00A86B',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
             cursor: 'pointer',
             fontSize: '14px',
+            fontWeight: '500',
+            transition: 'background 0.2s',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
         >
           {showForm ? '✕ Cancelar' : '+ Subir Documento'}
         </button>
@@ -278,7 +282,7 @@ export default function DocumentsPage() {
                   <div
                     style={{
                       height: '100%',
-                      background: '#667eea',
+                      background: '#00A86B',
                       width: `${uploadProgress}%`,
                       transition: 'width 0.3s',
                     }}
@@ -291,13 +295,17 @@ export default function DocumentsPage() {
               style={{
                 gridColumn: '1 / -1',
                 padding: '10px',
-                background: '#667eea',
+                background: '#00A86B',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
                 cursor: 'pointer',
                 fontSize: '14px',
+                fontWeight: '500',
+                transition: 'background 0.2s',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
             >
               Subir Documento
             </button>
@@ -368,14 +376,17 @@ export default function DocumentsPage() {
                         onClick={() => handleDownload(doc.id, doc.fileName)}
                         style={{
                           padding: '6px 12px',
-                          background: '#28a745',
+                          background: '#00A86B',
                           color: 'white',
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
                           fontSize: '12px',
                           fontWeight: '500',
+                          transition: 'background 0.2s',
                         }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                       >
                         ⬇ Descargar
                       </button>

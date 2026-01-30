@@ -50,6 +50,15 @@ export class AttendanceService {
     }
   }
 
+  async getAllAttendance(): Promise<Attendance[]> {
+    try {
+      return await AttendanceRepository.getAll();
+    } catch (error) {
+      logger.error('Error getting all attendance', error);
+      throw error;
+    }
+  }
+
   async updateAttendance(id: string, data: Partial<Attendance>): Promise<Attendance | null> {
     try {
       const attendance = await AttendanceRepository.update(id, data);

@@ -65,10 +65,20 @@ export class EmployeeService {
     }
   }
 
+async getActiveEmployeesCount(): Promise<number> {
+  try {
+    const activeEmployees = await EmployeeRepository.getActiveEmployees();
+    return activeEmployees.length;
+  } catch (error) {
+    logger.error('Error counting active employees', error);
+    throw error;
+  }
+}
+
+
   async updateEmployee(id: string, data: Partial<Employee>): Promise<Employee | null> {
     try {
       const employee = await EmployeeRepository.update(id, data);
-      logger.info(`Employee updated: ${id}`);
 
       // Send notification if important fields changed
       if (data.baseSalary || data.status || data.contractEndDate) {

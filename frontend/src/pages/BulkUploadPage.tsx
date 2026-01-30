@@ -156,10 +156,11 @@ export default function BulkUploadPage() {
           onClick={() => setActiveTab('employees')}
           style={{
             padding: '10px 20px',
-            background: activeTab === 'employees' ? '#667eea' : (theme === 'light' ? '#f5f7fa' : '#374151'),
+            background: activeTab === 'employees' ? '#00A86B' : (theme === 'light' ? '#f5f7fa' : '#374151'),
             color: activeTab === 'employees' ? 'white' : (theme === 'light' ? '#666' : '#9ca3af'),
             border: 'none',
             borderRadius: '5px 5px 0 0',
+            transition: 'background 0.2s',
             cursor: 'pointer',
             fontSize: '14px',
             fontWeight: activeTab === 'employees' ? 'bold' : 'normal',
@@ -171,10 +172,11 @@ export default function BulkUploadPage() {
           onClick={() => setActiveTab('roles')}
           style={{
             padding: '10px 20px',
-            background: activeTab === 'roles' ? '#667eea' : (theme === 'light' ? '#f5f7fa' : '#374151'),
+            background: activeTab === 'roles' ? '#00A86B' : (theme === 'light' ? '#f5f7fa' : '#374151'),
             color: activeTab === 'roles' ? 'white' : (theme === 'light' ? '#666' : '#9ca3af'),
             border: 'none',
             borderRadius: '5px 5px 0 0',
+            transition: 'background 0.2s',
             cursor: 'pointer',
             fontSize: '14px',
             fontWeight: activeTab === 'roles' ? 'bold' : 'normal',
@@ -186,10 +188,11 @@ export default function BulkUploadPage() {
           onClick={() => setActiveTab('payroll')}
           style={{
             padding: '10px 20px',
-            background: activeTab === 'payroll' ? '#667eea' : (theme === 'light' ? '#f5f7fa' : '#374151'),
+            background: activeTab === 'payroll' ? '#00A86B' : (theme === 'light' ? '#f5f7fa' : '#374151'),
             color: activeTab === 'payroll' ? 'white' : (theme === 'light' ? '#666' : '#9ca3af'),
             border: 'none',
             borderRadius: '5px 5px 0 0',
+            transition: 'background 0.2s',
             cursor: 'pointer',
             fontSize: '14px',
             fontWeight: activeTab === 'payroll' ? 'bold' : 'normal',
@@ -282,13 +285,17 @@ export default function BulkUploadPage() {
                   disabled={uploading}
                   style={{
                     padding: '10px 20px',
-                    background: uploading ? '#ccc' : '#28a745',
+                    background: uploading ? '#ccc' : '#00A86B',
                     color: 'white',
                     border: 'none',
                     borderRadius: '5px',
                     cursor: uploading ? 'not-allowed' : 'pointer',
                     fontSize: '14px',
+                    fontWeight: '500',
+                    transition: 'background 0.2s',
                   }}
+                  onMouseEnter={(e) => !uploading && (e.currentTarget.style.background = '#008C5A')}
+                  onMouseLeave={(e) => !uploading && (e.currentTarget.style.background = '#00A86B')}
                 >
                   {uploading ? `Cargando... ${uploadProgress}%` : '✓ Cargar Empleados'}
                 </button>
@@ -375,13 +382,17 @@ export default function BulkUploadPage() {
                   disabled={uploading}
                   style={{
                     padding: '10px 20px',
-                    background: uploading ? '#ccc' : '#28a745',
+                    background: uploading ? '#ccc' : '#00A86B',
                     color: 'white',
                     border: 'none',
                     borderRadius: '5px',
                     cursor: uploading ? 'not-allowed' : 'pointer',
                     fontSize: '14px',
+                    fontWeight: '500',
+                    transition: 'background 0.2s',
                   }}
+                  onMouseEnter={(e) => !uploading && (e.currentTarget.style.background = '#008C5A')}
+                  onMouseLeave={(e) => !uploading && (e.currentTarget.style.background = '#00A86B')}
                 >
                   {uploading ? `Cargando... ${uploadProgress}%` : '✓ Cargar Roles'}
                 </button>
@@ -468,13 +479,17 @@ export default function BulkUploadPage() {
                   disabled={uploading}
                   style={{
                     padding: '10px 20px',
-                    background: uploading ? '#ccc' : '#28a745',
+                    background: uploading ? '#ccc' : '#00A86B',
                     color: 'white',
                     border: 'none',
                     borderRadius: '5px',
                     cursor: uploading ? 'not-allowed' : 'pointer',
                     fontSize: '14px',
+                    fontWeight: '500',
+                    transition: 'background 0.2s',
                   }}
+                  onMouseEnter={(e) => !uploading && (e.currentTarget.style.background = '#008C5A')}
+                  onMouseLeave={(e) => !uploading && (e.currentTarget.style.background = '#00A86B')}
                 >
                   {uploading ? `Cargando... ${uploadProgress}%` : '✓ Cargar Nómina'}
                 </button>
@@ -757,13 +772,17 @@ export default function BulkUploadPage() {
                   }}
                   style={{
                     padding: '10px 20px',
-                    background: '#28a745',
+                    background: '#00A86B',
                     color: 'white',
                     border: 'none',
                     borderRadius: '5px',
                     cursor: 'pointer',
                     fontSize: '14px',
+                    fontWeight: '500',
+                    transition: 'background 0.2s',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                 >
                   ✓ Cerrar
                 </button>

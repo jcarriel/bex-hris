@@ -10,7 +10,6 @@ import AttendanceService from '@services/AttendanceService';
 import LeaveService from '@services/LeaveService';
 import DocumentService from '@services/DocumentService';
 import DocumentCategoryService from '@services/DocumentCategoryService';
-import InventoryService from '@services/InventoryService';
 import { TaskService } from '@services/TaskService';
 import NotificationScheduleService from '@services/NotificationScheduleService';
 import SchedulerService from '@services/SchedulerService';
@@ -240,6 +239,24 @@ export class ResourceController {
     }
   }
 
+  async getPayrollSumByPeriod(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { year, month } = req.params;
+      const period = `${year}/${month}`;
+      const payrolls = await PayrollService.getPayrollByPeriod(period);
+      
+      // Sumar todos los baseSalary de las nóminas
+      const totalPayroll = payrolls.reduce((sum: number, payroll: any) => {
+        return sum + (payroll.baseSalary || 0);
+      }, 0);
+      
+      res.status(200).json({ success: true, data: totalPayroll });
+    } catch (error) {
+      logger.error('Get payroll sum error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
   // ===== ATTENDANCE =====
   async createAttendance(req: AuthRequest, res: Response): Promise<void> {
     try {
@@ -262,6 +279,16 @@ export class ResourceController {
       res.status(200).json({ success: true, data: attendance });
     } catch (error) {
       logger.error('Get attendance error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getAllAttendance(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const attendance = await AttendanceService.getAllAttendance();
+      res.status(200).json({ success: true, data: attendance });
+    } catch (error) {
+      logger.error('Get all attendance error', error);
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
     }
   }
@@ -474,122 +501,6 @@ export class ResourceController {
     }
   }
 
-  // ===== INVENTORY ITEMS =====
-  async createInventoryItem(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { name, description, typeId, quantity, minQuantity, maxQuantity, unit, location } = req.body;
-      if (!name || !typeId) {
-        res.status(400).json({ success: false, message: 'Name and typeId are required' });
-        return;
-      }
-
-      const item = await InventoryService.createInventoryItem(name, description, typeId, quantity || 0, minQuantity || 0, maxQuantity, unit, location);
-      res.status(201).json({ success: true, data: item });
-    } catch (error) {
-      logger.error('Create inventory item error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getInventoryItems(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const items = await InventoryService.getAllInventoryItems();
-      res.status(200).json({ success: true, data: items });
-    } catch (error) {
-      logger.error('Get inventory items error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getInventoryItemsByType(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { typeId } = req.params;
-      const items = await InventoryService.getInventoryByType(typeId);
-      res.status(200).json({ success: true, data: items });
-    } catch (error) {
-      logger.error('Get inventory items by type error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async updateInventoryItem(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const item = await InventoryService.updateInventoryItem(id, req.body);
-      res.status(200).json({ success: true, data: item });
-    } catch (error) {
-      logger.error('Update inventory item error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async deleteInventoryItem(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const result = await InventoryService.deleteInventoryItem(id);
-      if (!result) {
-        res.status(404).json({ success: false, message: 'Item not found' });
-        return;
-      }
-      res.status(200).json({ success: true, message: 'Item deleted successfully' });
-    } catch (error) {
-      logger.error('Delete inventory item error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  // ===== INVENTORY TYPES =====
-  async createInventoryType(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { name, description } = req.body;
-      if (!name) {
-        res.status(400).json({ success: false, message: 'Name is required' });
-        return;
-      }
-
-      const type = await InventoryService.createInventoryType(name, description);
-      res.status(201).json({ success: true, data: type });
-    } catch (error) {
-      logger.error('Create inventory type error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getInventoryTypes(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const types = await InventoryService.getAllInventoryTypes();
-      res.status(200).json({ success: true, data: types });
-    } catch (error) {
-      logger.error('Get inventory types error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async updateInventoryType(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const type = await InventoryService.updateInventoryType(id, req.body);
-      res.status(200).json({ success: true, data: type });
-    } catch (error) {
-      logger.error('Update inventory type error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async deleteInventoryType(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const result = await InventoryService.deleteInventoryType(id);
-      if (!result) {
-        res.status(404).json({ success: false, message: 'Type not found' });
-        return;
-      }
-      res.status(200).json({ success: true, message: 'Type deleted successfully' });
-    } catch (error) {
-      logger.error('Delete inventory type error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
 
   // ===== TASKS =====
   async createTask(req: AuthRequest, res: Response): Promise<void> {
@@ -1411,12 +1322,57 @@ export class ResourceController {
         }
       }
 
+      // Procesar nóminas pendientes después de registrar empleados
+      const pendingPayrolls = req.body.pendingPayrolls || [];
+      const processedPayrolls: any[] = [];
+      const payrollErrors: any[] = [];
+
+      if (pendingPayrolls.length > 0) {
+        logger.info(`Processing ${pendingPayrolls.length} pending payrolls after employee registration`);
+        
+        for (const payrollData of pendingPayrolls) {
+          try {
+            // Buscar el empleado recién creado por cédula
+            const employee = await EmployeeRepository.findByCedula(payrollData.cedula);
+            
+            if (employee) {
+              payrollData.employeeId = employee.id;
+              
+              // Eliminar nómina existente si la hay
+              const db = (await import('@config/database')).getDatabase();
+              await db.run(
+                'DELETE FROM payroll WHERE employeeId = ? AND year = ? AND month = ?',
+                [payrollData.employeeId, payrollData.year, payrollData.month]
+              );
+              
+              // Crear la nómina
+              const newPayroll = await PayrollRepository.create(payrollData);
+              processedPayrolls.push(newPayroll);
+              logger.info(`Pending payroll processed for ${payrollData.cedula} - ${payrollData.year}/${payrollData.month}`);
+            } else {
+              payrollErrors.push({
+                cedula: payrollData.cedula,
+                error: 'Empleado no encontrado después del registro',
+              });
+            }
+          } catch (error) {
+            logger.error(`Error processing pending payroll for ${payrollData.cedula}:`, error);
+            payrollErrors.push({
+              cedula: payrollData.cedula,
+              error: error instanceof Error ? error.message : 'Error procesando nómina',
+            });
+          }
+        }
+      }
+
       res.status(201).json({
         success: true,
         message: `${registered.length} empleados registrados, ${errors.length} con errores`,
         data: {
           registered,
           errors,
+          processedPayrolls,
+          payrollErrors,
         },
       });
     } catch (error) {

@@ -44,7 +44,7 @@ export default function PositionsPage() {
     e.preventDefault();
     
     if (!formData.departmentId) {
-      alert('Por favor selecciona un departamento');
+      alert('Por favor selecciona un centro de costo');
       return;
     }
 
@@ -89,10 +89,12 @@ export default function PositionsPage() {
           onClick={() => setShowForm(!showForm)}
           style={{
             padding: '10px 20px',
-            background: '#667eea',
+            background: '#00A86B',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
+            fontWeight: '500',
+            transition: 'background 0.2s',
             cursor: 'pointer',
             fontSize: '14px',
           }}
@@ -204,13 +206,17 @@ export default function PositionsPage() {
               style={{
                 gridColumn: '1 / -1',
                 padding: '10px',
-                background: departments.length === 0 ? '#ccc' : '#667eea',
+                background: departments.length === 0 ? '#ccc' : '#00A86B',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
                 cursor: departments.length === 0 ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
+                fontWeight: '500',
+                transition: 'background 0.2s',
               }}
+              onMouseEnter={(e) => departments.length > 0 && (e.currentTarget.style.background = '#008C5A')}
+              onMouseLeave={(e) => departments.length > 0 && (e.currentTarget.style.background = '#00A86B')}
             >
               Guardar Puesto
             </button>

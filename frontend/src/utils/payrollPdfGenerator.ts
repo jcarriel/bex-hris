@@ -199,7 +199,7 @@ const generatePayrollPDFContent = (payroll: PayrollData, companyName: string = '
           justify-content: space-between;
           font-size: 11px;
           font-weight: bold;
-          margin-top: 1px;
+          margin-top: 5px;
           padding-top: 5px;
           border-top: 1px solid #333;
           color: #000;
@@ -332,7 +332,7 @@ const generatePayrollPDFContent = (payroll: PayrollData, companyName: string = '
 
         <div class="net-pay-section">
           <div class="net-pay-label">Total a Recibir</div>
-          <div class="net-pay-value">$${calculatedTotalToPay.toFixed(2)}</div>
+          <div class="net-pay-value">$${payroll.totalToPay.toFixed(2)}</div>
         </div>
 
         <div class="signature-section">

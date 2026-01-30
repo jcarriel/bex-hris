@@ -50,6 +50,11 @@ export class AttendanceRepository {
     return db.all('SELECT * FROM attendance WHERE date = ? ORDER BY employeeId', [date]);
   }
 
+  async getAll(): Promise<Attendance[]> {
+    const db = getDatabase();
+    return db.all('SELECT * FROM attendance ORDER BY date DESC');
+  }
+
   async update(id: string, data: Partial<Attendance>): Promise<Attendance | null> {
     const db = getDatabase();
     const now = new Date().toISOString();

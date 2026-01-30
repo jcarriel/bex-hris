@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import SearchFilter from '../components/SearchFilter';
-import DataTable from '../components/DataTable';
+import DataTableAdvanced from '../components/DataTableAdvanced';
+import InputField from '../components/InputField';
+import SelectField from '../components/SelectField';
 import { showSuccess, showError, showConfirm } from '../utils/alertify';
 import { useThemeStore } from '../stores/themeStore';
 
@@ -75,6 +77,38 @@ export default function EmployeesPage() {
     applyFiltersAndSearch();
   }, [employees, searchQuery, filters]);
 
+  // Manejar clicks en botones de acciones
+  useEffect(() => {
+    const handleActionClick = (e: any) => {
+      const button = (e.target as HTMLElement).closest('.action-btn');
+      if (!button) return;
+
+      const action = button.getAttribute('data-action');
+      const employeeId = button.getAttribute('data-id');
+      
+      if (!employeeId) return;
+
+      const employee = filteredEmployees.find((emp: any) => emp.id === employeeId);
+      if (!employee) return;
+
+      switch (action) {
+        case 'docs':
+          openDocumentsModal(employee);
+          break;
+        case 'edit':
+          handleEditEmployee(employee);
+          break;
+        case 'delete':
+          handleDeleteEmployee(employee);
+          break;
+      }
+    };
+
+    // Agregar listener al documento
+    document.addEventListener('click', handleActionClick);
+    return () => document.removeEventListener('click', handleActionClick);
+  }, [filteredEmployees]);
+
   // Cargar Cargos cuando cambia el departamento seleccionado
   useEffect(() => {
     if (formData.departmentId) {
@@ -111,7 +145,7 @@ export default function EmployeesPage() {
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const response = await api.getEmployees(1, 100);
+      const response = await api.getEmployees(1, 500);
       setEmployees(response.data.data.data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
@@ -147,17 +181,23 @@ export default function EmployeesPage() {
     if (filters.positionId) {
       result = result.filter((emp: any) => emp.positionId === filters.positionId);
     }
-    if (filters.salaryRange_min) {
+    if (filters.salaryRange_min && !isNaN(parseFloat(filters.salaryRange_min))) {
       result = result.filter((emp: any) => emp.baseSalary >= parseFloat(filters.salaryRange_min));
     }
-    if (filters.salaryRange_max) {
+    if (filters.salaryRange_max && !isNaN(parseFloat(filters.salaryRange_max))) {
       result = result.filter((emp: any) => emp.baseSalary <= parseFloat(filters.salaryRange_max));
     }
     if (filters.hireDateFrom) {
-      result = result.filter((emp: any) => emp.hireDate >= filters.hireDateFrom);
+      result = result.filter((emp: any) => emp.hireDate && emp.hireDate.split('T')[0] >= filters.hireDateFrom);
     }
     if (filters.hireDateTo) {
-      result = result.filter((emp: any) => emp.hireDate <= filters.hireDateTo);
+      result = result.filter((emp: any) => emp.hireDate && emp.hireDate.split('T')[0] <= filters.hireDateTo);
+    }
+    if (filters.contractEndDateFrom) {
+      result = result.filter((emp: any) => emp.contractEndDate && emp.contractEndDate.split('T')[0] >= filters.contractEndDateFrom);
+    }
+    if (filters.contractEndDateTo) {
+      result = result.filter((emp: any) => emp.contractEndDate && emp.contractEndDate.split('T')[0] <= filters.contractEndDateTo);
     }
 
     setFilteredEmployees(result);
@@ -361,6 +401,42 @@ export default function EmployeesPage() {
     });
   };
 
+  const handleEditEmployee = (employee: any) => {
+    setFormData({
+      firstName: employee.firstName || '',
+      lastName: employee.lastName || '',
+      email: employee.email || '',
+      cedula: employee.cedula || '',
+      phone: employee.phone || '',
+      departmentId: employee.departmentId || '',
+      positionId: employee.positionId || '',
+      hireDate: employee.hireDate?.split('T')[0] || '',
+      baseSalary: employee.baseSalary?.toString() || '',
+      dateOfBirth: employee.dateOfBirth?.split('T')[0] || '',
+      gender: employee.gender || '',
+      maritalStatus: employee.maritalStatus || '',
+      address: employee.address || '',
+      contractType: employee.contractType || '',
+      currentContract: employee.currentContract || '',
+      contractEndDate: employee.contractEndDate?.split('T')[0] || '',
+    });
+    setEditingId(employee.id);
+    setShowForm(true);
+  };
+
+  const handleDeleteEmployee = (employee: any) => {
+    showConfirm(`¿Estás seguro de que deseas eliminar a ${employee.firstName} ${employee.lastName}?`, async () => {
+      try {
+        await api.client.delete(`/employees/${employee.id}`);
+        showSuccess('Empleado eliminado exitosamente');
+        fetchEmployees();
+      } catch (error) {
+        console.error('Error deleting employee:', error);
+        showError('Error al eliminar el empleado');
+      }
+    });
+  };
+
   return (
     <div style={{ padding: '20px' }}>
       <SearchFilter
@@ -398,13 +474,17 @@ export default function EmployeesPage() {
           }}
           style={{
             padding: '10px 20px',
-            background: '#667eea',
+            background: '#00A86B',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
             cursor: 'pointer',
             fontSize: '14px',
+            fontWeight: '500',
+            transition: 'background 0.2s',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
         >
           {showForm ? '✕ Cancelar' : '+ Nuevo Empleado'}
         </button>
@@ -446,187 +526,107 @@ export default function EmployeesPage() {
         }}>
           <h3 style={{ marginTop: 0, color: theme === 'light' ? '#333' : '#ffffff' }}>{editingId ? 'Editar Empleado' : 'Registrar Nuevo Empleado'}</h3>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
-            <input
-              type="text"
+            <InputField
+              label="Nombre"
               name="firstName"
-              placeholder="Nombre"
+              type="text"
               value={formData.firstName}
               onChange={handleChange}
               required
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
             />
-            <input
-              type="text"
+            <InputField
+              label="Apellido"
               name="lastName"
-              placeholder="Apellido"
+              type="text"
               value={formData.lastName}
               onChange={handleChange}
               required
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
             />
-            <input
-              type="email"
+            <InputField
+              label="Email"
               name="email"
-              placeholder="Email (Opcional)"
+              type="email"
               value={formData.email}
               onChange={handleChange}
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
             />
-            <select
+            <SelectField
+              label="Centro de Costo"
               name="departmentId"
               value={formData.departmentId}
               onChange={handleChange}
+              options={departments.map((dept: any) => ({ value: dept.id, label: dept.name }))}
+              placeholder="Seleccionar Centro de Costo"
               required
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
-            >
-              <option value="">Seleccionar Centro de Costo</option>
-              {departments.map((dept: any) => (
-                <option key={dept.id} value={dept.id}>{dept.name}</option>
-              ))}
-            </select>
-            <select
+            />
+            <SelectField
+              label="Puesto"
               name="positionId"
               value={formData.positionId}
               onChange={handleChange}
+              options={positions
+                .filter((pos: any) => pos.departmentId === formData.departmentId)
+                .map((pos: any) => ({ value: pos.id, label: pos.name }))}
+              placeholder={!formData.departmentId ? 'Selecciona un centro de costo primero' : 'Seleccionar Puesto'}
               required
               disabled={!formData.departmentId}
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: !formData.departmentId ? (theme === 'light' ? '#f0f0f0' : '#374151') : (theme === 'light' ? 'white' : '#374151'),
-                color: theme === 'light' ? '#333' : '#ffffff',
-                cursor: !formData.departmentId ? 'not-allowed' : 'pointer',
-              }}
-            >
-              <option value="">
-                {!formData.departmentId ? 'Selecciona un departamento primero' : 'Seleccionar Puesto'}
-              </option>
-              {positions
-                .filter((pos: any) => pos.departmentId === formData.departmentId)
-                .map((pos: any) => (
-                  <option key={pos.id} value={pos.id}>{pos.name}</option>
-                ))}
-            </select>
-            <input
-              type="date"
+            />
+            <InputField
+              label="Fecha de Ingreso"
               name="hireDate"
+              type="date"
               value={formData.hireDate}
               onChange={handleChange}
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
             />
-            <input
-              type="number"
+            <InputField
+              label="Salario Base"
               name="baseSalary"
-              placeholder="Salario Base"
+              type="number"
               value={formData.baseSalary}
               onChange={handleChange}
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
             />
-            <select
+            <SelectField
+              label="Tipo de Contrato"
               name="contractType"
               value={formData.contractType}
               onChange={handleChange}
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
-            >
-              <option value="">Tipo de Contrato</option>
-              <option value="indefinite">Indefinido</option>
-              <option value="fixed">Plazo Fijo</option>
-              <option value="temporary">Temporal</option>
-              <option value="intern">Practicante</option>
-            </select>
-            <input
-              type="text"
+              options={[
+                { value: 'indefinite', label: 'Indefinido' },
+                { value: 'fixed', label: 'Plazo Fijo' },
+                { value: 'temporary', label: 'Temporal' },
+                { value: 'intern', label: 'Practicante' },
+              ]}
+              placeholder="Seleccionar Tipo de Contrato"
+            />
+            <InputField
+              label="Contrato Actual"
               name="currentContract"
-              placeholder="Contrato Actual"
+              type="text"
               value={formData.currentContract}
               onChange={handleChange}
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
             />
-            <input
-              type="date"
+            <InputField
+              label="Fecha Terminación Contrato"
               name="contractEndDate"
-              placeholder="Fecha Terminación Contrato"
+              type="date"
               value={formData.contractEndDate}
               onChange={handleChange}
-              style={{
-                padding: '10px',
-                border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
-                borderRadius: '5px',
-                fontSize: '14px',
-                background: theme === 'light' ? 'white' : '#374151',
-                color: theme === 'light' ? '#333' : '#ffffff',
-              }}
             />
             <button
               type="submit"
               style={{
                 gridColumn: '1 / -1',
                 padding: '10px',
-                background: '#667eea',
+                background: '#00A86B',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
                 cursor: 'pointer',
                 fontSize: '14px',
+                fontWeight: '500',
+                transition: 'background 0.2s',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
             >
               {editingId ? '💾 Actualizar Empleado' : '💾 Guardar Empleado'}
             </button>
@@ -639,205 +639,121 @@ export default function EmployeesPage() {
           Cargando empleados...
         </div>
       ) : (
-        <DataTable
-          columns={[
+          <DataTableAdvanced
+            columns={[
             {
-              key: 'cedula',
-              label: 'Cédula',
-              sortable: true,
-              render: (value) => value || '-',
+              title: 'Cédula',
+              data: 'cedula',
+              render: (data) => data || '-',
             },
             {
-              key: 'fullName',
-              label: 'Apellidos-Nombres',
-              sortable: true,
-              render: (_, row) => `${row.lastName} ${row.firstName}`,
+              title: 'Apellidos-Nombres',
+              data: 'firstName',
+              render: (data, type, row) => `${row.lastName} ${row.firstName}`,
             },
             {
-              key: 'contractType',
-              label: 'Tipo Contrato',
-              sortable: true,
-              render: (value) => {
+              title: 'Tipo Contrato',
+              data: 'contractType',
+              render: (data) => {
                 const types: Record<string, string> = {
                   'indefinite': 'Indefinido',
                   'fixed': 'Plazo Fijo',
                   'temporary': 'Temporal',
                   'intern': 'Practicante',
                 };
-                return types[value] || '-';
+                return types[data] || '-';
               },
             },
             {
-              key: 'currentContract',
-              label: 'Contrato Actual',
-              sortable: true,
-              render: (value) => value || '-',
+              title: 'Contrato Actual',
+              data: 'currentContract',
+              render: (data) => data || '-',
             },
             {
-              key: 'contractEndDate',
-              label: 'Fecha Terminación Contrato',
-              sortable: true,
-              render: (value) => value ? value.split('T')[0] : '-',
+              title: 'Cargo',
+              data: 'positionId',
+              render: (data) => positions.find((p: any) => p.id === data)?.name || '-',
             },
             {
-              key: 'positionId',
-              label: 'Cargo',
-              sortable: true,
-              render: (value) => positions.find((p: any) => p.id === value)?.name || '-',
+              title: 'Centro de Costo',
+              data: 'departmentId',
+              render: (data) => departments.find((d: any) => d.id === data)?.name || '-',
             },
             {
-              key: 'departmentId',
-              label: 'Centro de Costo',
-              sortable: true,
-              render: (value) => departments.find((d: any) => d.id === value)?.name || '-',
+              title: 'Sueldo',
+              data: 'baseSalary',
+              render: (data) => `$${data?.toLocaleString() || '-'}`,
             },
             {
-              key: 'baseSalary',
-              label: 'Sueldo',
-              sortable: true,
-              render: (value) => `$${value?.toLocaleString() || '-'}`,
+              title: 'Fecha de Ingreso',
+              data: 'hireDate',
+              render: (data) => data?.split('T')[0] || '-',
             },
             {
-              key: 'hireDate',
-              label: 'Fecha de Ingreso',
-              sortable: true,
-              render: (value) => value?.split('T')[0] || '-',
-            },
-            {
-              key: 'dateOfBirth',
-              label: 'Edad',
-              sortable: true,
-              render: (value) => {
-                if (!value) return '-';
-                const birthDate = new Date(value);
-                const today = new Date();
-                let age = today.getFullYear() - birthDate.getFullYear();
-                const monthDiff = today.getMonth() - birthDate.getMonth();
-                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                  age--;
-                }
-                return age;
+              title: 'Estado',
+              data: 'status',
+              render: (data) => {
+                const bgColor = data === 'active' ? '#d4edda' : '#f8d7da';
+                const textColor = data === 'active' ? '#155724' : '#721c24';
+                const text = data === 'active' ? 'Activo' : 'Inactivo';
+                return `<span style="background: ${bgColor}; color: ${textColor}; padding: 4px 8px; border-radius: 3px; font-size: 11px;">${text}</span>`;
               },
             },
             {
-              key: 'maritalStatus',
-              label: 'Estado Civil',
-              sortable: true,
-              render: (value) => {
-                const statuses: Record<string, string> = {
-                  'single': 'Soltero',
-                  'married': 'Casado',
-                  'divorced': 'Divorciado',
-                  'widowed': 'Viudo',
-                };
-                return statuses[value] || '-';
+              title: 'Acciones',
+              data: null,
+              render: (data, type, row) => {
+                return `<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button class="action-btn docs-btn" data-id="${row.id}" data-action="docs">📄</button>
+                  <button class="action-btn edit-btn" data-id="${row.id}" data-action="edit">✏️</button>
+                  <button class="action-btn delete-btn" data-id="${row.id}" data-action="delete">🗑</button>
+                </div>`;
               },
-            },
-            {
-              key: 'address',
-              label: 'Procedencia',
-              sortable: true,
-              render: (value) => value || '-',
-            },
-            {
-              key: 'status',
-              label: 'Estado',
-              sortable: true,
-              render: (value) => (
-                <span style={{
-                  background: value === 'active' ? '#d4edda' : '#f8d7da',
-                  color: value === 'active' ? '#155724' : '#721c24',
-                  padding: '4px 8px',
-                  borderRadius: '3px',
-                  fontSize: '11px',
-                }}>
-                  {value === 'active' ? 'Activo' : 'Inactivo'}
-                </span>
-              ),
             },
           ]}
           data={filteredEmployees}
-          pageSize={10}
-          actions={(emp) => (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => openDocumentsModal(emp)}
-                style={{
-                  padding: '6px 12px',
-                  background: '#667eea',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
-              >
-                📄 Documentos
-              </button>
-              <button
-                onClick={() => {
-                  setFormData({
-                    firstName: emp.firstName,
-                    lastName: emp.lastName,
-                    email: emp.email,
-                    cedula: emp.cedula,
-                    phone: emp.phone || '',
-                    departmentId: emp.departmentId,
-                    positionId: emp.positionId,
-                    hireDate: emp.hireDate?.split('T')[0] || '',
-                    baseSalary: emp.baseSalary?.toString() || '',
-                    dateOfBirth: emp.dateOfBirth?.split('T')[0] || '',
-                    gender: emp.gender || '',
-                    maritalStatus: emp.maritalStatus || '',
-                    address: emp.address || '',
-                    contractType: emp.contractType || '',
-                    currentContract: emp.currentContract || '',
-                    contractEndDate: emp.contractEndDate?.split('T')[0] || '',
-                  });
-                  setEditingId(emp.id);
-                  setShowForm(true);
-                }}
-                style={{
-                  padding: '6px 12px',
-                  background: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
-              >
-                ✏️ Editar
-              </button>
-              <button
-                onClick={() => {
-                  showConfirm('¿Estás seguro de que deseas eliminar este empleado?', async () => {
-                    try {
-                      await api.client.delete(`/employees/${emp.id}`);
-                      fetchEmployees();
-                      showSuccess('Empleado eliminado exitosamente');
-                    } catch (error) {
-                      console.error('Error deleting employee:', error);
-                      showError('Error al eliminar el empleado');
-                    }
-                  });
-                }}
-                style={{
-                  padding: '6px 12px',
-                  background: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
-              >
-                🗑 Eliminar
-              </button>
-            </div>
-          )}
-        />
+          pageLength={12}
+          excludeColumns={[9]}
+          />
       )}
+      
+      <style>{`
+        .action-btn {
+          padding: 6px 12px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          transition: all 0.2s ease;
+        }
+        
+        .docs-btn {
+          background: #00A86B;
+          color: white;
+        }
+        
+        .docs-btn:hover {
+          background: #008C5A;
+        }
+        
+        .edit-btn {
+          background: #00A86B;
+          color: white;
+        }
+        
+        .edit-btn:hover {
+          background: #008C5A;
+        }
+        
+        .delete-btn {
+          background: #dc3545;
+          color: white;
+        }
+        
+        .delete-btn:hover {
+          background: #c82333;
+        }
+      `}</style>
 
       {showDocumentsModal && selectedEmployee && (
         <div style={{
@@ -949,7 +865,7 @@ export default function EmployeesPage() {
                   style={{
                     flex: 1,
                     padding: '10px 15px',
-                    background: selectedFiles.length > 0 && selectedCategory && !uploadingDoc ? '#667eea' : '#ccc',
+                    background: selectedFiles.length > 0 && selectedCategory && !uploadingDoc ? '#00A86B' : '#ccc',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -1005,7 +921,7 @@ export default function EmployeesPage() {
                           cursor: 'pointer',
                           textAlign: 'center',
                           transition: 'all 0.3s ease',
-                          boxShadow: isExpanded ? '0 4px 12px rgba(102, 126, 234, 0.2)' : '0 2px 4px rgba(0,0,0,0.1)',
+                          boxShadow: isExpanded ? '0 4px 12px rgba(0, 140, 90, 0.2)' : '0 2px 4px rgba(0,0,0,0.1)',
                         }}
                       >
                         <div style={{ fontSize: '32px', marginBottom: '10px' }}>📁</div>

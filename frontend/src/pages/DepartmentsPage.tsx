@@ -94,10 +94,12 @@ export default function DepartmentsPage() {
           onClick={() => editingId ? cancelEdit() : setShowForm(!showForm)}
           style={{
             padding: '10px 20px',
-            background: '#667eea',
+            background: '#00A86B',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
+            fontWeight: '500',
+            transition: 'background 0.2s',
             cursor: 'pointer',
             fontSize: '14px',
           }}
@@ -149,10 +151,12 @@ export default function DepartmentsPage() {
               style={{
                 gridColumn: '1 / -1',
                 padding: '10px',
-                background: '#667eea',
+                background: '#00A86B',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
+                fontWeight: '500',
+                transition: 'background 0.2s',
                 cursor: 'pointer',
                 fontSize: '14px',
               }}

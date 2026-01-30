@@ -251,13 +251,15 @@ export default function SettingsPage() {
                   disabled={loading}
                   style={{
                     padding: '10px 20px',
-                    background: '#667eea',
+                    background: '#00A86B',
                     color: 'white',
                     border: 'none',
                     borderRadius: '5px',
                     cursor: loading ? 'not-allowed' : 'pointer',
                     fontSize: '14px',
+                    fontWeight: '500',
                     opacity: loading ? 0.7 : 1,
+                    transition: 'background 0.2s',
                   }}
                 >
                   {loading ? 'Actualizando...' : 'Actualizar Contraseña'}
@@ -300,13 +302,13 @@ export default function SettingsPage() {
                     onClick={toggleTheme}
                     style={{
                       padding: '10px 20px',
-                      background: theme === 'dark' ? '#667eea' : '#f0f0f0',
+                      background: theme === 'dark' ? '#00A86B' : '#f0f0f0',
                       color: theme === 'dark' ? 'white' : '#333',
                       border: `1px solid ${borderColor}`,
                       borderRadius: '5px',
+                      fontWeight: '500',
                       cursor: 'pointer',
                       fontSize: '14px',
-                      fontWeight: '500',
                       transition: 'all 0.3s',
                     }}
                     onMouseEnter={(e) => {

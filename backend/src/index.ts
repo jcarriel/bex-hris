@@ -52,6 +52,7 @@ app.post('/api/auth/change-password', authMiddleware, (req, res) =>
 // Employee routes
 app.post('/api/employees', authMiddleware, (req, res) => EmployeeController.create(req, res));
 app.get('/api/employees', authMiddleware, (req, res) => EmployeeController.getAll(req, res));
+app.get('/api/employees/count', authMiddleware, (req, res) => EmployeeController.getAllCountEmployees(req, res));
 app.delete('/api/employees/clear', authMiddleware, (req, res) => ResourceController.clearEmployees(req, res));
 app.get('/api/employees/contracts/expiring', authMiddleware, (req, res) =>
   EmployeeController.getExpiringContracts(req, res)
@@ -104,6 +105,7 @@ app.get('/api/payroll', authMiddleware, (req, res) => ResourceController.getAllP
 app.delete('/api/payroll/clear', authMiddleware, (req, res) => ResourceController.clearPayrolls(req, res));
 app.delete('/api/payroll/period/:year/:month', authMiddleware, (req, res) => ResourceController.deletePayrollByPeriod(req, res));
 app.get('/api/payroll/period/:year/:month', authMiddleware, (req, res) => ResourceController.getPayrollByPeriod(req, res));
+app.get('/api/payroll/sum/:year/:month', authMiddleware, (req, res) => ResourceController.getPayrollSumByPeriod(req, res));
 app.get('/api/payroll/employee/:employeeId', authMiddleware, (req, res) => ResourceController.getPayrollByEmployee(req, res));
 app.get('/api/payroll/:id', authMiddleware, (req, res) => ResourceController.getPayroll(req, res));
 app.put('/api/payroll/:id', authMiddleware, (req, res) => ResourceController.updatePayroll(req, res));
@@ -111,7 +113,14 @@ app.delete('/api/payroll/:id', authMiddleware, (req, res) => ResourceController.
 
 // Attendance routes
 app.post('/api/attendance', authMiddleware, (req, res) => ResourceController.createAttendance(req, res));
-app.get('/api/attendance', authMiddleware, (req, res) => ResourceController.getAttendanceByEmployee(req, res));
+app.get('/api/attendance', authMiddleware, (req, res) => {
+  // Si hay employeeId, obtener asistencia por empleado; si no, obtener toda la asistencia
+  if (req.query.employeeId) {
+    return ResourceController.getAttendanceByEmployee(req, res);
+  } else {
+    return ResourceController.getAllAttendance(req, res);
+  }
+});
 
 // Leave routes
 app.get('/api/leaves', authMiddleware, (req, res) => ResourceController.getAllLeaves(req, res));
@@ -133,19 +142,6 @@ app.post('/api/document-categories', authMiddleware, (req, res) => ResourceContr
 app.get('/api/document-categories', authMiddleware, (req, res) => ResourceController.getDocumentCategories(req, res));
 app.put('/api/document-categories/:id', authMiddleware, (req, res) => ResourceController.updateDocumentCategory(req, res));
 app.delete('/api/document-categories/:id', authMiddleware, (req, res) => ResourceController.deleteDocumentCategory(req, res));
-
-// Inventory routes
-app.post('/api/inventory', authMiddleware, (req, res) => ResourceController.createInventoryItem(req, res));
-app.get('/api/inventory', authMiddleware, (req, res) => ResourceController.getInventoryItems(req, res));
-app.get('/api/inventory/type/:typeId', authMiddleware, (req, res) => ResourceController.getInventoryItemsByType(req, res));
-app.put('/api/inventory/:id', authMiddleware, (req, res) => ResourceController.updateInventoryItem(req, res));
-app.delete('/api/inventory/:id', authMiddleware, (req, res) => ResourceController.deleteInventoryItem(req, res));
-
-// Inventory Types routes
-app.post('/api/inventory-types', authMiddleware, (req, res) => ResourceController.createInventoryType(req, res));
-app.get('/api/inventory-types', authMiddleware, (req, res) => ResourceController.getInventoryTypes(req, res));
-app.put('/api/inventory-types/:id', authMiddleware, (req, res) => ResourceController.updateInventoryType(req, res));
-app.delete('/api/inventory-types/:id', authMiddleware, (req, res) => ResourceController.deleteInventoryType(req, res));
 
 // Tasks routes
 app.post('/api/tasks', authMiddleware, (req, res) => ResourceController.createTask(req, res));

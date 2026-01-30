@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import DataTable from '../components/DataTable';
+import DataTableAdvanced from '../components/DataTableAdvanced';
 import { useThemeStore } from '../stores/themeStore';
 import { showSuccess, showError } from '../utils/alertify';
 import generatePayrollPDF, { generateMultiplePayrollPDFsAsOne } from '../utils/payrollPdfGenerator';
@@ -15,6 +15,7 @@ export default function PayrollPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [payrollTypeFilter, setPayrollTypeFilter] = useState('');
   const [selectedPayroll, setSelectedPayroll] = useState<any>(null);
   const [showPayrollDetail, setShowPayrollDetail] = useState(false);
   const [selectedForPrint, setSelectedForPrint] = useState<Set<string>>(new Set());
@@ -29,7 +30,63 @@ export default function PayrollPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [payrolls, searchQuery, statusFilter, departmentFilter]);
+  }, [payrolls, searchQuery, statusFilter, departmentFilter, payrollTypeFilter]);
+
+  // Manejar clicks en botones de acciones y checkboxes
+  useEffect(() => {
+    const handleActionClick = (e: any) => {
+      const button = (e.target as HTMLElement).closest('.payroll-btn');
+      if (!button) return;
+
+      const action = button.getAttribute('data-action');
+      const payrollId = button.getAttribute('data-id');
+      
+      if (!payrollId) return;
+
+      const payroll = filteredPayrolls.find((p: any) => p.id === payrollId);
+      if (!payroll) return;
+
+      switch (action) {
+        case 'view':
+          setSelectedPayroll(payroll);
+          setShowPayrollDetail(true);
+          break;
+        case 'pdf':
+          handlePrintSingle(payroll);
+          break;
+        case 'delete':
+          if (window.confirm(`¿Estás seguro de que deseas eliminar la nómina de ${payroll.employeeName}?`)) {
+            handleDeletePayroll(payrollId);
+          }
+          break;
+      }
+    };
+
+    const handleCheckboxChange = (e: any) => {
+      const checkbox = e.target as HTMLInputElement;
+      
+      if (checkbox.id === 'selectAllPayrolls') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSelectAllToggle();
+      } else if (checkbox.classList.contains('payroll-checkbox')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const payrollId = checkbox.getAttribute('data-id');
+        if (payrollId) {
+          handleTogglePayrollSelection(payrollId);
+        }
+      }
+    };
+
+    // Usar captura para interceptar antes que DataTables
+    document.addEventListener('click', handleActionClick, true);
+    document.addEventListener('change', handleCheckboxChange, true);
+    return () => {
+      document.removeEventListener('click', handleActionClick, true);
+      document.removeEventListener('change', handleCheckboxChange, true);
+    };
+  }, [filteredPayrolls, selectedForPrint]);
 
   const fetchPayrolls = async () => {
     try {
@@ -67,10 +124,16 @@ export default function PayrollPage() {
       result = result.filter((p: any) => p.departmentId === departmentFilter);
     }
 
+    // Filtro por tipo de nómina
+    if (payrollTypeFilter) {
+      result = result.filter((p: any) => p.payrollType === payrollTypeFilter);
+    }
+
     setFilteredPayrolls(result);
   };
 
   const departments = Array.from(new Set(payrolls.map((p: any) => p.departmentId))).filter(Boolean);
+  const payrollTypes = Array.from(new Set(payrolls.map((p: any) => p.payrollType))).filter(Boolean);
 
   const handleDeletePayroll = async (id: string) => {
     try {
@@ -106,16 +169,27 @@ export default function PayrollPage() {
       newSelected.add(payrollId);
     }
     setSelectedForPrint(newSelected);
-    setSelectAll(newSelected.size === filteredPayrolls.length && filteredPayrolls.length > 0);
+    
+    // Verificar si todos los de la página actual están seleccionados
+    const currentPageIds = filteredPayrolls.map((p: any) => p.id);
+    const allCurrentSelected = currentPageIds.every(id => newSelected.has(id));
+    setSelectAll(allCurrentSelected && currentPageIds.length > 0);
   };
 
   const handleSelectAllToggle = () => {
+    const currentPageIds = filteredPayrolls.map((p: any) => p.id);
+    
     if (selectAll) {
-      setSelectedForPrint(new Set());
+      // Deseleccionar solo los de la página actual
+      const newSelected = new Set(selectedForPrint);
+      currentPageIds.forEach(id => newSelected.delete(id));
+      setSelectedForPrint(newSelected);
       setSelectAll(false);
     } else {
-      const allIds = new Set(filteredPayrolls.map((p: any) => p.id));
-      setSelectedForPrint(allIds);
+      // Seleccionar solo los de la página actual
+      const newSelected = new Set(selectedForPrint);
+      currentPageIds.forEach(id => newSelected.add(id));
+      setSelectedForPrint(newSelected);
       setSelectAll(true);
     }
   };
@@ -159,17 +233,17 @@ export default function PayrollPage() {
   return (
     <div style={{ padding: '20px' }}>
       {/* Filtros principales */}
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', padding: '15px', background: '#f0f9f6', borderRadius: '8px', border: '1px solid #00A86B' }}>
         <select
           value={month}
           onChange={(e) => setMonth(parseInt(e.target.value))}
           style={{
             padding: '8px 12px',
-            border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+            border: '1px solid #00A86B',
             borderRadius: '5px',
             fontSize: '14px',
-            background: theme === 'light' ? 'white' : '#374151',
-            color: theme === 'light' ? '#333' : '#ffffff',
+            background: 'white',
+            color: '#333',
           }}
         >
           {Array.from({ length: 12 }, (_, i) => (
@@ -183,11 +257,11 @@ export default function PayrollPage() {
           onChange={(e) => setYear(parseInt(e.target.value))}
           style={{
             padding: '8px 12px',
-            border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+            border: '1px solid #00A86B',
             borderRadius: '5px',
             fontSize: '14px',
-            background: theme === 'light' ? 'white' : '#374151',
-            color: theme === 'light' ? '#333' : '#ffffff',
+            background: 'white',
+            color: '#333',
           }}
         >
           {Array.from({ length: 5 }, (_, i) => {
@@ -211,7 +285,10 @@ export default function PayrollPage() {
             fontSize: '14px',
             fontWeight: '500',
             marginLeft: 'auto',
+            transition: 'background 0.2s',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#c82333')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#dc3545')}
           title="Eliminar todas las nóminas"
         >
           🗑️ Limpiar Tabla
@@ -222,12 +299,13 @@ export default function PayrollPage() {
       <div style={{
         marginBottom: '20px',
         padding: '15px',
-        background: theme === 'light' ? '#f8f9fa' : '#1f2937',
+        background: '#f0f9f6',
         borderRadius: '8px',
         display: 'flex',
         gap: '12px',
         alignItems: 'center',
         flexWrap: 'wrap',
+        border: '1px solid #00A86B',
       }}>
         <input
           type="text"
@@ -236,11 +314,11 @@ export default function PayrollPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
             padding: '8px 12px',
-            border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+            border: '1px solid #00A86B',
             borderRadius: '5px',
             fontSize: '14px',
-            background: theme === 'light' ? 'white' : '#374151',
-            color: theme === 'light' ? '#333' : '#ffffff',
+            background: 'white',
+            color: '#333',
             flex: 1,
             minWidth: '200px',
           }}
@@ -250,11 +328,11 @@ export default function PayrollPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           style={{
             padding: '8px 12px',
-            border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+            border: '1px solid #00A86B',
             borderRadius: '5px',
             fontSize: '14px',
-            background: theme === 'light' ? 'white' : '#374151',
-            color: theme === 'light' ? '#333' : '#ffffff',
+            background: 'white',
+            color: '#333',
           }}
         >
           <option value="">Todos los estados</option>
@@ -267,11 +345,11 @@ export default function PayrollPage() {
           onChange={(e) => setDepartmentFilter(e.target.value)}
           style={{
             padding: '8px 12px',
-            border: `1px solid ${theme === 'light' ? '#ddd' : '#374151'}`,
+            border: '1px solid #00A86B',
             borderRadius: '5px',
             fontSize: '14px',
-            background: theme === 'light' ? 'white' : '#374151',
-            color: theme === 'light' ? '#333' : '#ffffff',
+            background: 'white',
+            color: '#333',
           }}
         >
           <option value="">Todos los departamentos</option>
@@ -281,21 +359,45 @@ export default function PayrollPage() {
             </option>
           ))}
         </select>
+        <select
+          value={payrollTypeFilter}
+          onChange={(e) => setPayrollTypeFilter(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            border: '1px solid #00A86B',
+            borderRadius: '5px',
+            fontSize: '14px',
+            background: 'white',
+            color: '#333',
+          }}
+        >
+          <option value="">Todos los tipos de nómina</option>
+          {payrollTypes.map((type: any) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
         <button
           onClick={() => {
             setSearchQuery('');
             setStatusFilter('');
             setDepartmentFilter('');
+            setPayrollTypeFilter('');
           }}
           style={{
             padding: '8px 12px',
-            background: theme === 'light' ? '#6c757d' : '#4b5563',
+            background: '#00A86B',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
             cursor: 'pointer',
             fontSize: '14px',
+            fontWeight: '500',
+            transition: 'background 0.2s',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
         >
           ↺ Limpiar filtros
         </button>
@@ -304,14 +406,17 @@ export default function PayrollPage() {
           disabled={selectedForPrint.size === 0}
           style={{
             padding: '8px 16px',
-            background: selectedForPrint.size === 0 ? '#ccc' : '#007bff',
+            background: selectedForPrint.size === 0 ? '#ccc' : '#00A86B',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
             cursor: selectedForPrint.size === 0 ? 'not-allowed' : 'pointer',
             fontSize: '14px',
             fontWeight: '500',
+            transition: 'background 0.2s',
           }}
+          onMouseEnter={(e) => selectedForPrint.size > 0 && (e.currentTarget.style.background = '#008C5A')}
+          onMouseLeave={(e) => selectedForPrint.size > 0 && (e.currentTarget.style.background = '#00A86B')}
           title={`Imprimir ${selectedForPrint.size} rol(es) seleccionado(s)`}
         >
           🖨️  ({selectedForPrint.size})
@@ -321,14 +426,17 @@ export default function PayrollPage() {
           disabled={filteredPayrolls.length === 0}
           style={{
             padding: '8px 16px',
-            background: filteredPayrolls.length === 0 ? '#ccc' : '#17a2b8',
+            background: filteredPayrolls.length === 0 ? '#ccc' : '#00A86B',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
             cursor: filteredPayrolls.length === 0 ? 'not-allowed' : 'pointer',
             fontSize: '14px',
             fontWeight: '500',
+            transition: 'background 0.2s',
           }}
+          onMouseEnter={(e) => filteredPayrolls.length > 0 && (e.currentTarget.style.background = '#008C5A')}
+          onMouseLeave={(e) => filteredPayrolls.length > 0 && (e.currentTarget.style.background = '#00A86B')}
           title={`Imprimir todos los ${filteredPayrolls.length} rol(es) del período`}
         >
           📋 Imprimir Todo
@@ -347,170 +455,115 @@ export default function PayrollPage() {
           Cargando nóminas...
         </div>
       ) : (
-        <DataTable
-          onPageChange={(page) => setCurrentPage(page)}
+        <DataTableAdvanced
           columns={[
             {
-              key: 'select',
-              label: (() => {
-                const startIdx = (currentPage - 1) * pageSize;
-                const endIdx = startIdx + pageSize;
-                const currentPagePayrolls = filteredPayrolls.slice(startIdx, endIdx);
-                const currentPageIds = new Set(currentPagePayrolls.map((p: any) => p.id));
-                const allCurrentPageSelected = currentPagePayrolls.length > 0 && 
-                  currentPagePayrolls.every((p: any) => selectedForPrint.has(p.id));
-                const someCurrentPageSelected = currentPagePayrolls.some((p: any) => selectedForPrint.has(p.id));
-
-                return (
-                  <input
-                    type="checkbox"
-                    checked={allCurrentPageSelected}
-                    ref={(el) => {
-                      if (el) {
-                        (el as any).indeterminate = someCurrentPageSelected && !allCurrentPageSelected;
-                      }
-                    }}
-                    onChange={() => {
-                      if (allCurrentPageSelected) {
-                        const newSelected = new Set(selectedForPrint);
-                        currentPageIds.forEach(id => newSelected.delete(id));
-                        setSelectedForPrint(newSelected);
-                      } else {
-                        const newSelected = new Set(selectedForPrint);
-                        currentPageIds.forEach(id => newSelected.add(id));
-                        setSelectedForPrint(newSelected);
-                      }
-                    }}
-                    style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                    title="Seleccionar/deseleccionar todos de esta página"
-                  />
-                );
-              })() as any,
-              render: (_, payroll) => (
-                <input
-                  type="checkbox"
-                  checked={selectedForPrint.has(payroll.id)}
-                  onChange={() => handleTogglePayrollSelection(payroll.id)}
-                  style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                />
-              ),
+              title: '<input type="checkbox" id="selectAllPayrolls" style="cursor: pointer;">',
+              data: null,
+              render: (data, type, row) => {
+                const isSelected = selectedForPrint.has(row.id);
+                return `<input type="checkbox" class="payroll-checkbox" data-id="${row.id}" ${isSelected ? 'checked' : ''} style="cursor: pointer;">`;
+              },
             },
             {
-              key: 'employeeName',
-              label: 'Empleado',
-              sortable: true,
-              render: (value) => value || '-',
+              title: 'Empleado',
+              data: 'employeeName',
+              render: (data) => data || '-',
             },
             {
-              key: 'cedula',
-              label: 'Cédula',
-              sortable: true,
-              render: (value) => value || '-',
+              title: 'Cédula',
+              data: 'cedula',
+              render: (data) => data || '-',
             },
             {
-              key: 'baseSalary',
-              label: 'Sueldo Base',
-              sortable: true,
-              render: (value) => `$${value?.toLocaleString() || '-'}`,
+              title: 'Tipo de Nómina',
+              data: 'payrollType',
+              render: (data) => data || '-',
             },
             {
-              key: 'totalIncome',
-              label: 'Total Ingresos',
-              sortable: true,
-              render: (value) => `$${value?.toLocaleString() || '-'}`,
+              title: 'Sueldo Base',
+              data: 'baseSalary',
+              render: (data) => `$${data?.toLocaleString() || '-'}`,
             },
             {
-              key: 'totalDeductions',
-              label: 'Total Egresos',
-              sortable: true,
-              render: (value) => `$${value?.toLocaleString() || '-'}`,
+              title: 'Total Ingresos',
+              data: 'totalIncome',
+              render: (data) => `$${data?.toLocaleString() || '-'}`,
             },
             {
-              key: 'totalToPay',
-              label: 'Total a Pagar',
-              sortable: true,
-              render: (value) => `$${value?.toLocaleString() || '-'}`,
+              title: 'Total Egresos',
+              data: 'totalDeductions',
+              render: (data) => `$${data?.toLocaleString() || '-'}`,
             },
             {
-              key: 'status',
-              label: 'Estado',
-              sortable: true,
-              render: (value) => (
-                <span style={{
-                  background: value === 'paid' ? '#d4edda' : '#fff3cd',
-                  color: value === 'paid' ? '#155724' : '#856404',
-                  padding: '4px 8px',
-                  borderRadius: '3px',
-                  fontSize: '11px',
-                }}>
-                  {value === 'paid' ? 'Pagado' : value === 'processed' ? 'Procesado' : 'Borrador'}
-                </span>
-              ),
+              title: 'Total a Pagar',
+              data: 'totalToPay',
+              render: (data) => `$${data?.toLocaleString() || '-'}`,
             },
             {
-              key: 'actions',
-              label: 'Acciones',
-              render: (_, payroll) => (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => {
-                      setSelectedPayroll(payroll);
-                      setShowPayrollDetail(true);
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      background: '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                    }}
-                  >
-                    👁 Ver
-                  </button>
-                  <button
-                    onClick={() => handlePrintSingle(payroll)}
-                    style={{
-                      padding: '6px 12px',
-                      background: '#28a745',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                    }}
-                    title="Descargar PDF"
-                  >
-                    🖨 PDF
-                  </button>
-                  <button
-                    onClick={() => {
-                      const confirmed = window.confirm('¿Estás seguro de que deseas eliminar esta nómina?');
-                      if (confirmed) {
-                        handleDeletePayroll(payroll.id);
-                      }
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      background: '#dc3545',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                    }}
-                  >
-                    🗑 Eliminar
-                  </button>
-                </div>
-              ),
+              title: 'Estado',
+              data: 'status',
+              render: (data) => {
+                const bgColor = data === 'paid' ? '#d4edda' : '#fff3cd';
+                const textColor = data === 'paid' ? '#155724' : '#856404';
+                const text = data === 'paid' ? 'Pagado' : data === 'processed' ? 'Procesado' : 'Borrador';
+                return `<span style="background: ${bgColor}; color: ${textColor}; padding: 4px 8px; border-radius: 3px; font-size: 11px;">${text}</span>`;
+              },
+            },
+            {
+              title: 'Acciones',
+              data: null,
+              render: (data, type, row) => {
+                return `<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button class="payroll-btn view-btn" data-id="${row.id}" data-action="view" title="Ver detalle">👁</button>
+                  <button class="payroll-btn pdf-btn" data-id="${row.id}" data-action="pdf" title="Descargar PDF">🖨</button>
+                  <button class="payroll-btn delete-btn" data-id="${row.id}" data-action="delete" title="Eliminar">🗑</button>
+                </div>`;
+              },
             },
           ]}
           data={filteredPayrolls}
-          pageSize={15}
+          pageLength={15}
         />
       )}
+      
+      <style>{`
+        .payroll-btn {
+          padding: 6px 12px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          transition: all 0.2s ease;
+        }
+        
+        .view-btn {
+          background: #00A86B;
+          color: white;
+        }
+        
+        .view-btn:hover {
+          background: #008C5A;
+        }
+        
+        .pdf-btn {
+          background: #00A86B;
+          color: white;
+        }
+        
+        .pdf-btn:hover {
+          background: #008C5A;
+        }
+        
+        .delete-btn {
+          background: #dc3545;
+          color: white;
+        }
+        
+        .delete-btn:hover {
+          background: #c82333;
+        }
+      `}</style>
 
       {/* Modal de detalle de nómina */}
       {showPayrollDetail && selectedPayroll && (

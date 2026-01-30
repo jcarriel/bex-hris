@@ -23,12 +23,14 @@ export class PayrollBulkUploadService {
     updatedCount: number;
     errors: Array<{ row: number; error: string }>;
     notFoundEmployees: Array<{ row: number; cedula: string; name: string }>;
+    pendingPayrolls: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>>;
     data: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>>;
   }> {
     try {
       const errors: Array<{ row: number; error: string }> = [];
       const notFoundEmployees: Array<{ row: number; cedula: string; name: string }> = [];
       const processedPayrolls: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>> = [];
+      const pendingPayrolls: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>> = [];
       let createdCount = 0;
       let updatedCount = 0;
 
@@ -349,10 +351,9 @@ export class PayrollBulkUploadService {
                 cedula: payrollData.cedula,
                 name: payrollData.employeeName,
               });
-              errors.push({
-                row: rowIndex + 1,
-                error: `Empleado no encontrado con cédula: ${payrollData.cedula}`,
-              });
+              // Guardar la nómina como pendiente para procesarla después de crear el empleado
+              pendingPayrolls.push(payrollData);
+              logger.info(`Payroll for employee ${payrollData.cedula} saved as pending - will be processed after employee registration`);
               continue;
             }
             
@@ -430,6 +431,7 @@ export class PayrollBulkUploadService {
         updatedCount,
         errors,
         notFoundEmployees,
+        pendingPayrolls,
         data: processedPayrolls,
       };
     } catch (error) {

@@ -158,13 +158,17 @@ export default function NotificationsPage() {
             }}
             style={{
               padding: '10px 20px',
-              background: '#667eea',
+              background: '#00A86B',
               color: 'white',
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',
               fontSize: '14px',
+              fontWeight: '500',
+              transition: 'background 0.2s',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
           >
             {showForm ? '✕ Cancelar' : '+ Nueva Notificación'}
           </button>

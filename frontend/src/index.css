@@ -1,10 +1,6 @@
-* {
+body {
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
-}
-
-body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -15,4 +11,194 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* DataTables - Modo Claro */
+html:not([data-theme="dark"]) table.dataTable thead th,
+html:not([data-theme="dark"]) table.dataTable thead td {
+  background: #f8fafc !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  padding: 4px 6px !important;
+}
+
+html:not([data-theme="dark"]) table.dataTable tbody tr {
+  background: white !important;
+  color: #1e293b !important;
+}
+
+html:not([data-theme="dark"]) table.dataTable.stripe tbody tr.odd {
+  background: #f8fafc !important;
+}
+
+html:not([data-theme="dark"]) table.dataTable.hover tbody tr:hover {
+  background: #f1f5f9 !important;
+}
+
+html:not([data-theme="dark"]) table.dataTable tbody td {
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 4px 6px !important;
+  font-size: 11px !important;
+  color: #1e293b !important;
+}
+
+html:not([data-theme="dark"]) table.dataTable.compact tbody td {
+  padding: 3px 5px !important;
+  font-size: 11px !important;
+}
+
+html:not([data-theme="dark"]) table.dataTable thead th,
+html:not([data-theme="dark"]) table.dataTable thead td {
+  font-size: 12px !important;
+}
+
+/* DataTables - Modo Oscuro */
+html[data-theme="dark"] table.dataTable thead th,
+html[data-theme="dark"] table.dataTable thead td {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  font-weight: 600 !important;
+  border-bottom: 2px solid #334155 !important;
+  padding: 4px 6px !important;
+}
+
+html[data-theme="dark"] table.dataTable tbody tr {
+  background: #0f172a !important;
+  color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] table.dataTable.stripe tbody tr.odd {
+  background: #1e293b !important;
+}
+
+html[data-theme="dark"] table.dataTable.hover tbody tr:hover {
+  background: #334155 !important;
+}
+
+html[data-theme="dark"] table.dataTable tbody td {
+  border-bottom: 1px solid #334155 !important;
+  padding: 4px 6px !important;
+  font-size: 11px !important;
+  color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] table.dataTable.compact tbody td {
+  padding: 3px 5px !important;
+  font-size: 11px !important;
+}
+
+html[data-theme="dark"] table.dataTable thead th,
+html[data-theme="dark"] table.dataTable thead td {
+  font-size: 12px !important;
+}
+
+/* Entries per page - Modo Claro */
+html:not([data-theme="dark"]) .dt-container .dt-length {
+  color: #1e293b !important;
+}
+
+html:not([data-theme="dark"]) .dt-container .dt-length select {
+  background: white !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+  font-size: 11px !important;
+}
+
+html:not([data-theme="dark"]) .dt-container .dt-length label {
+  color: #1e293b !important;
+}
+
+/* Entries per page - Modo Oscuro */
+html[data-theme="dark"] .dt-container .dt-length {
+  color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .dt-container .dt-length select {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #334155 !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+  font-size: 11px !important;
+}
+
+html[data-theme="dark"] .dt-container .dt-length label {
+  color: #e2e8f0 !important;
+}
+
+/* Paginación - Modo Claro */
+html:not([data-theme="dark"]) .dt-container .dt-paging {
+  color: #1e293b !important;
+}
+
+html:not([data-theme="dark"]) .dt-container .dt-paging .dt-paging-button {
+  background: white !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  padding: 2px 6px !important;
+  margin: 0 1px !important;
+  border-radius: 3px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+}
+
+html:not([data-theme="dark"]) .dt-container .dt-paging .dt-paging-button:hover {
+  background: #e2e8f0 !important;
+  border-color: #94a3b8 !important;
+}
+
+html:not([data-theme="dark"]) .dt-container .dt-paging .dt-paging-button.current {
+  background: #3b82f6 !important;
+  color: white !important;
+  border-color: #3b82f6 !important;
+}
+
+html:not([data-theme="dark"]) .dt-container .dt-paging .dt-paging-button.disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Paginación - Modo Oscuro */
+html[data-theme="dark"] .dt-container .dt-paging {
+  color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .dt-container .dt-paging .dt-paging-button {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #334155 !important;
+  padding: 2px 6px !important;
+  margin: 0 1px !important;
+  border-radius: 3px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+}
+
+html[data-theme="dark"] .dt-container .dt-paging .dt-paging-button:hover {
+  background: #334155 !important;
+  border-color: #475569 !important;
+}
+
+html[data-theme="dark"] .dt-container .dt-paging .dt-paging-button.current {
+  background: #3b82f6 !important;
+  color: white !important;
+  border-color: #3b82f6 !important;
+}
+
+html[data-theme="dark"] .dt-container .dt-paging .dt-paging-button.disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Info - Modo Claro */
+html:not([data-theme="dark"]) .dt-container .dt-info {
+  color: #1e293b !important;
+}
+
+/* Info - Modo Oscuro */
+html[data-theme="dark"] .dt-container .dt-info {
+  color: #e2e8f0 !important;
 }

@@ -231,7 +231,7 @@ export default function DocumentGeneratorPage() {
             onClick={() => setActiveTab(tab)}
             style={{
               padding: '12px 20px',
-              background: activeTab === tab ? '#667eea' : 'transparent',
+              background: activeTab === tab ? '#00A86B' : 'transparent',
               color: activeTab === tab ? 'white' : theme === 'light' ? '#666' : '#9ca3af',
               border: 'none',
               borderRadius: '5px 5px 0 0',
@@ -260,10 +260,12 @@ export default function DocumentGeneratorPage() {
               }}
               style={{
                 padding: '10px 20px',
-                background: '#667eea',
+                background: '#00A86B',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
+                fontWeight: '500',
+                transition: 'background 0.2s',
                 cursor: 'pointer',
                 fontSize: '14px',
               }}
@@ -518,9 +520,9 @@ export default function DocumentGeneratorPage() {
                   onClick={() => handleSelectTemplate(template)}
                   style={{
                     padding: '12px',
-                    background: selectedTemplate?.id === template.id ? '#667eea' : theme === 'light' ? 'white' : '#1f2937',
+                    background: selectedTemplate?.id === template.id ? '#00A86B' : theme === 'light' ? 'white' : '#1f2937',
                     color: selectedTemplate?.id === template.id ? 'white' : theme === 'light' ? '#333' : '#ffffff',
-                    border: `2px solid ${selectedTemplate?.id === template.id ? '#667eea' : theme === 'light' ? '#eee' : '#374151'}`,
+                    border: `2px solid ${selectedTemplate?.id === template.id ? '#00A86B' : theme === 'light' ? '#eee' : '#374151'}`,
                     borderRadius: '5px',
                     cursor: 'pointer',
                     textAlign: 'left',

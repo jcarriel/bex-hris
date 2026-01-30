@@ -302,7 +302,8 @@ cd /home/jacarriel/Repositories/BEX-HRIS/frontend && npx netlify sites:create --
 cd /home/jacarriel/Repositories/BEX-HRIS/frontend && npx netlify deploy --prod --dir=build
 
 
-Despliegue Netlify BackEnd
-cd /home/jacarriel/Repositories/BEX-HRIS/backend && npm run build 2>&1 | tail -50
+Despliegue Heroku BackEnd
+cd /home/jacarriel/Repositories/BEX-HRIS && git add . && git commit -m "Configure CORS with explicit headers and methods" && git push origin main
+cd /home/jacarriel/Repositories/BEX-HRIS && git subtree push --prefix backend heroku main
 
 

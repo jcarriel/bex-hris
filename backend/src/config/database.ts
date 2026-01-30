@@ -501,35 +501,6 @@ async function createTables(db: Database): Promise<void> {
     )
   `);
 
-  // Inventory Types table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS inventory_types (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      description TEXT,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    )
-  `);
-
-  // Inventory table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS inventory (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      typeId TEXT NOT NULL,
-      quantity INTEGER NOT NULL DEFAULT 0,
-      minQuantity INTEGER DEFAULT 0,
-      maxQuantity INTEGER,
-      unit TEXT,
-      location TEXT,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL,
-      FOREIGN KEY (typeId) REFERENCES inventory_types(id)
-    )
-  `);
-
   // Tasks table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
@@ -573,17 +544,6 @@ async function createTables(db: Database): Promise<void> {
       ('4', 'Memorandum', 'Memorandums', datetime('now'), datetime('now')),
       ('5', 'Identificacion', 'Documentos de identificación', datetime('now'), datetime('now')),
       ('6', 'Otro', 'Otros documentos', datetime('now'), datetime('now'))
-  `);
-
-  // Insert default inventory types if they don't exist
-  await db.run(`
-    INSERT OR IGNORE INTO inventory_types (id, name, description, createdAt, updatedAt)
-    VALUES 
-      ('1', 'Equipos', 'Equipos de oficina y tecnología', datetime('now'), datetime('now')),
-      ('2', 'Suministros', 'Suministros de oficina', datetime('now'), datetime('now')),
-      ('3', 'Muebles', 'Muebles de oficina', datetime('now'), datetime('now')),
-      ('4', 'Herramientas', 'Herramientas y equipos especializados', datetime('now'), datetime('now')),
-      ('5', 'Otros', 'Otros tipos de inventario', datetime('now'), datetime('now'))
   `);
 
   // Insert system user for document uploads if it doesn't exist

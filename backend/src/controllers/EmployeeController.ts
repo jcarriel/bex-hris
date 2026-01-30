@@ -87,6 +87,22 @@ export class EmployeeController {
     }
   }
 
+  async getAllCountEmployees(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const count = await EmployeeService.getActiveEmployeesCount();
+      res.status(200).json({
+        success: true,
+        data: count,
+      });
+    } catch (error) {
+      logger.error('Get employees count error', error);
+      res.status(400).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get employees count',
+      });
+    }
+  }
+
   async update(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;

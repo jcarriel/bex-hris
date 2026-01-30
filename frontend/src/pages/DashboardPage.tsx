@@ -10,7 +10,6 @@ import LeavesPage from './LeavesPage';
 import ReportsPage from './ReportsPage';
 import AdministrationPage from './AdministrationPage';
 import DocumentsPage from './DocumentsPage';
-import InventoryPage from './InventoryPage';
 import SettingsPage from './SettingsPage';
 import DocumentGeneratorPage from './DocumentGeneratorPage';
 import BulkUploadPage from './BulkUploadPage';
@@ -30,10 +29,10 @@ export default function DashboardPage() {
   });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats] = useState([
-    { title: 'Empleados Activos', value: '0', color: '#667eea' },
-    { title: 'Nómina del Mes', value: '$0', color: '#764ba2' },
-    { title: 'Licencias Pendientes', value: '0', color: '#f093fb' },
-    { title: 'Asistencia Hoy', value: '0/0', color: '#4facfe' },
+    { title: 'Empleados Activos', value: '0', color: '#00A86B' },
+    { title: 'Nómina del Mes Anterior', value: '$0', color: '#00A86B' },
+    { title: 'Licencias Pendientes', value: '0', color: '#00A86B' },
+    { title: 'Asistencia Hoy', value: '0/0', color: '#00A86B' },
   ]);
   const [recentActivities, setRecentActivities] = useState<string[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -50,29 +49,25 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [empsRes, attendanceRes, tasksRes, leavesRes, notifRes] = await Promise.all([
-        api.client.get('/employees'),
+      // Calcular mes anterior
+      const today = new Date();
+      const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1);
+      const previousYear = lastMonth.getFullYear();
+      const previousMonth = String(lastMonth.getMonth() + 1).padStart(2, '0');
+
+      const [empsRes, attendanceRes, tasksRes, leavesRes, notifRes, payrollRes] = await Promise.all([
+        api.client.get('/employees/count'),
         api.client.get('/attendance'),
         api.client.get('/tasks').catch(() => ({ data: { data: [] } })),
         api.client.get('/leaves').catch(() => ({ data: { data: [] } })),
         api.client.get('/notification-schedules').catch(() => ({ data: { data: [] } })),
+        api.client.get(`/payroll/sum/${previousYear}/${previousMonth}`).catch(() => ({ data: { data: 0 } })),
       ]);
 
-      // Handle different response structures
-      // For paginated responses, extract the data array from the nested structure
-      let employees: any[] = [];
-      if (Array.isArray(empsRes.data.data?.data)) {
-        // Structure: { success, data: { data: [...], total, page, limit } }
-        employees = empsRes.data.data.data;
-      } else if (Array.isArray(empsRes.data.data)) {
-        // Structure: { success, data: [...] }
-        employees = empsRes.data.data;
-      } else if (Array.isArray(empsRes.data.items)) {
-        // Structure: { success, items: [...] }
-        employees = empsRes.data.items;
-      } else if (Array.isArray(empsRes.data)) {
-        // Structure: [...] direct array
-        employees = empsRes.data;
+      let activeEmployees = 0;
+      if (typeof empsRes.data.data === 'number') {
+        // Structure: { success, data: count }
+        activeEmployees = empsRes.data.data;
       }
       
       const attendance = Array.isArray(attendanceRes.data.data) ? attendanceRes.data.data :
@@ -91,8 +86,12 @@ export default function DashboardPage() {
                            Array.isArray(notifRes.data.items) ? notifRes.data.items :
                            Array.isArray(notifRes.data) ? notifRes.data : [];
 
-      // Calcular estadísticas
-      const activeEmployees = Array.isArray(employees) ? employees.length : 0;
+      // Obtener suma de nóminas del mes anterior
+      let payrollSum = 0;
+      if (typeof payrollRes.data.data === 'number') {
+        payrollSum = payrollRes.data.data;
+      }
+
       const todayAttendance = Array.isArray(attendance) ? attendance.filter((a: any) => {
         const attendanceDate = new Date(a.date).toDateString();
         const today = new Date().toDateString();
@@ -124,10 +123,10 @@ export default function DashboardPage() {
       }) : [];
 
       setStats([
-        { title: 'Empleados Activos', value: activeEmployees.toString(), color: '#667eea' },
-        { title: 'Nómina del Mes', value: '$0', color: '#764ba2' },
-        { title: 'Licencias Pendientes', value: pendingLeaves.toString(), color: '#f093fb' },
-        { title: 'Asistencia Hoy', value: `${todayAttendance}/${activeEmployees}`, color: '#4facfe' },
+        { title: 'Empleados Activos', value: activeEmployees.toString(), color: '#00A86B' },
+        { title: 'Nómina del Mes Anterior', value: `$${payrollSum.toLocaleString()}`, color: '#00A86B' },
+        { title: 'Licencias Pendientes', value: pendingLeaves.toString(), color: '#00A86B' },
+        { title: 'Asistencia Hoy', value: `${todayAttendance}/${activeEmployees}`, color: '#00A86B' },
       ]);
 
       setTasks(todayTasks);
@@ -173,7 +172,6 @@ export default function DashboardPage() {
     { id: 'administration', label: 'Administración', icon: '⚙️' },
     { id: 'documents', label: 'Documentos', icon: '📄' },
     { id: 'documentGenerator', label: 'Generador de Docs', icon: '✍️' },
-    { id: 'inventory', label: 'Inventario', icon: '📦' },
     { id: 'attendance', label: 'Asistencia', icon: '📋' },
     { id: 'leaves', label: 'Licencias', icon: '🏖️' },
     { id: 'reports', label: 'Reportes', icon: '📈' },
@@ -185,7 +183,7 @@ export default function DashboardPage() {
       {/* Sidebar */}
       <div style={{
         width: sidebarOpen ? '250px' : '0px',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: '#00A86B',
         color: 'white',
         padding: sidebarOpen ? '20px' : '0px',
         overflowY: 'auto',
@@ -259,7 +257,7 @@ export default function DashboardPage() {
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: '#00A86B',
                 color: 'white',
                 border: 'none',
                 width: '40px',
@@ -272,6 +270,8 @@ export default function DashboardPage() {
                 fontSize: '20px',
                 transition: 'all 0.3s ease',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
               title={sidebarOpen ? 'Ocultar menú' : 'Mostrar menú'}
             >
               {sidebarOpen ? '✕' : '☰'}
@@ -466,7 +466,6 @@ export default function DashboardPage() {
           {activeTab === 'administration' && <AdministrationPage />}
           {activeTab === 'documents' && <DocumentsPage />}
           {activeTab === 'documentGenerator' && <DocumentGeneratorPage />}
-          {activeTab === 'inventory' && <InventoryPage />}
           {activeTab === 'attendance' && <AttendancePage />}
           {activeTab === 'leaves' && <LeavesPage />}
           {activeTab === 'reports' && <ReportsPage />}

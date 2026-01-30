@@ -11,8 +11,6 @@ export default function AdministrationPage() {
   const [positions, setPositions] = useState([]);
   const [labors, setLabors] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [inventoryTypes, setInventoryTypes] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,8 +22,6 @@ export default function AdministrationPage() {
   const [posFormData, setPosFormData] = useState({ name: '', description: '', departmentId: '', salaryMin: '', salaryMax: '' });
   const [laborFormData, setLaborFormData] = useState({ name: '', description: '', positionId: '' });
   const [catFormData, setCatFormData] = useState({ name: '', description: '' });
-  const [invTypeFormData, setInvTypeFormData] = useState({ name: '', description: '' });
-  const [invItemFormData, setInvItemFormData] = useState({ name: '', description: '', typeId: '', quantity: '', minQuantity: '', maxQuantity: '', unit: '', location: '' });
   const [taskFormData, setTaskFormData] = useState({ title: '', description: '', dueDate: '', priority: 'medium' });
 
   useEffect(() => {
@@ -35,20 +31,16 @@ export default function AdministrationPage() {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      const [deptRes, posRes, catRes, invTypeRes, invItemRes, tasksRes, empsRes] = await Promise.all([
+      const [deptRes, posRes, catRes, tasksRes, empsRes] = await Promise.all([
         api.client.get('/departments'),
         api.client.get('/positions'),
         api.client.get('/document-categories'),
-        api.client.get('/inventory-types'),
-        api.client.get('/inventory'),
         api.client.get('/tasks'),
         api.client.get('/employees'),
       ]);
       setDepartments(deptRes.data.data || []);
       setPositions(posRes.data.data || []);
       setCategories(catRes.data.data || []);
-      setInventoryTypes(invTypeRes.data.data || []);
-      setInventoryItems(invItemRes.data.data || []);
       setTasks(tasksRes.data.data || []);
       setEmployees(empsRes.data.data || []);
     } catch (error) {
@@ -343,13 +335,17 @@ export default function AdministrationPage() {
             }}
             style={{
               padding: '10px 20px',
-              background: '#667eea',
+              background: '#00A86B',
               color: 'white',
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',
               fontSize: '14px',
+              fontWeight: '500',
+              transition: 'background 0.2s',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
           >
             {showForm ? '✕ Cancelar' : `+ Nuevo ${tabs.find((t) => t.id === activeTab)?.label.split(' ')[0]}`}
           </button>
@@ -386,7 +382,9 @@ export default function AdministrationPage() {
                 />
                 <button
                   type="submit"
-                  style={{ gridColumn: '1 / -1', padding: '10px', background: '#667eea', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px' }}
+                  style={{ gridColumn: '1 / -1', padding: '10px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                 >
                   Guardar Centro de Costo
                 </button>
@@ -430,7 +428,9 @@ export default function AdministrationPage() {
                 />
                 <button
                   type="submit"
-                  style={{ gridColumn: '1 / -1', padding: '10px', background: '#667eea', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px' }}
+                  style={{ gridColumn: '1 / -1', padding: '10px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                 >
                   Guardar Labor
                 </button>
@@ -519,7 +519,9 @@ export default function AdministrationPage() {
                 />
                 <button
                   type="submit"
-                  style={{ gridColumn: '1 / -1', padding: '10px', background: '#667eea', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px' }}
+                  style={{ gridColumn: '1 / -1', padding: '10px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                 >
                   Guardar Categoría
                 </button>
@@ -588,7 +590,9 @@ export default function AdministrationPage() {
                         <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
                           <button
                             onClick={() => editDepartment(dept)}
-                            style={{ padding: '4px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
+                            style={{ padding: '4px 12px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', transition: 'background 0.2s' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                           >
                             ✏️ Editar
                           </button>
@@ -624,7 +628,9 @@ export default function AdministrationPage() {
                           <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
                             <button
                               onClick={() => editLabor(labor)}
-                              style={{ padding: '4px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
+                              style={{ padding: '4px 12px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', transition: 'background 0.2s' }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                             >
                               ✏️ Editar
                             </button>
@@ -663,7 +669,9 @@ export default function AdministrationPage() {
                           <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
                             <button
                               onClick={() => editPosition(pos)}
-                              style={{ padding: '4px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
+                              style={{ padding: '4px 12px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', transition: 'background 0.2s' }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                             >
                               ✏️ Editar
                             </button>
@@ -697,7 +705,9 @@ export default function AdministrationPage() {
                         <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
                           <button
                             onClick={() => editCategory(cat)}
-                            style={{ padding: '4px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
+                            style={{ padding: '4px 12px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', transition: 'background 0.2s' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
                           >
                             ✏️ Editar
                           </button>
@@ -766,7 +776,10 @@ export default function AdministrationPage() {
                           <option value="medium">Media</option>
                           <option value="high">Alta</option>
                         </select>
-                        <button type="submit" style={{ padding: '8px 16px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', gridColumn: '1 / -1' }}>
+                        <button type="submit" style={{ padding: '8px 16px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', gridColumn: '1 / -1', fontWeight: '500', transition: 'background 0.2s' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
+                        >
                           {editingId ? '✏️ Actualizar' : '✚ Crear'}
                         </button>
                       </form>

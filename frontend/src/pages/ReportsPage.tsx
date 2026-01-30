@@ -167,7 +167,7 @@ export default function ReportsPage() {
               style={{
                 flex: 1,
                 padding: '10px',
-                background: '#667eea',
+                background: '#00A86B',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
