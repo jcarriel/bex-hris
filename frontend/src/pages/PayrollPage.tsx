@@ -656,6 +656,7 @@ export default function PayrollPage() {
                     { label: 'VACACIONES', value: selectedPayroll.vacation || 0 },
                     { label: 'ALIM (ART 14 LEY SEG SOCIAL)', value: selectedPayroll.foodAllowance || 0 },
                     { label: 'OTROS INGRESOS', value: selectedPayroll.otherIncome || 0 },
+                    { label: `HORAS EXTRAS 50% (${selectedPayroll.overtimeHours50 || 0})`, value: selectedPayroll.overtimeValue50 || 0 },
                   ].filter(item => item.value && item.value > 0).map((item, idx) => (
                     <div key={idx} style={{
                       display: 'flex',
@@ -680,7 +681,9 @@ export default function PayrollPage() {
                   color: '#d4a574',
                 }}>
                   <span>Total Ingresos</span>
-                  <span>${((selectedPayroll.baseSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + (selectedPayroll.responsibilityBonus || 0) + (selectedPayroll.productivityBonus || 0) + (selectedPayroll.foodAllowance || 0) + (selectedPayroll.otherIncome || 0) + (selectedPayroll.vacation || 0)).toFixed(2)}</span>
+                  <span>${((selectedPayroll.baseSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + 
+                  (selectedPayroll.responsibilityBonus || 0) + (selectedPayroll.productivityBonus || 0) + (selectedPayroll.foodAllowance || 0) + 
+                  (selectedPayroll.otherIncome || 0) + (selectedPayroll.vacation || 0) + (selectedPayroll.overtimeValue50 || 0)).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -751,7 +754,7 @@ export default function PayrollPage() {
             }}>
               <span>TOTAL A RECIBIR</span>
               <span style={{ fontSize: '16px' }}>${(
-                ((selectedPayroll.baseSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + (selectedPayroll.responsibilityBonus || 0) + (selectedPayroll.productivityBonus || 0) + (selectedPayroll.foodAllowance || 0) + (selectedPayroll.otherIncome || 0)) + (selectedPayroll.vacation || 0) -
+                ((selectedPayroll.baseSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + (selectedPayroll.responsibilityBonus || 0) + (selectedPayroll.productivityBonus || 0) + (selectedPayroll.foodAllowance || 0) + (selectedPayroll.otherIncome || 0)) + (selectedPayroll.vacation || 0) + (selectedPayroll.overtimeValue50 || 0) -
                 ((selectedPayroll.advance || 0) + (selectedPayroll.iessContribution || 0) + (selectedPayroll.incomeTax || 0) + (selectedPayroll.iessLoan || 0) + (selectedPayroll.companyLoan || 0) + (selectedPayroll.spouseExtension || 0) + (selectedPayroll.nonWorkDays || 0) + (selectedPayroll.otherDeductions || 0) + (selectedPayroll.foodDeduction || 0))
               ).toFixed(2)}</span>
             </div>
