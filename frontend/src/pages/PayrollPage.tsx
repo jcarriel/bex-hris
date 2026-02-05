@@ -32,6 +32,13 @@ export default function PayrollPage() {
     applyFilters();
   }, [payrolls, searchQuery, statusFilter, departmentFilter, payrollTypeFilter]);
 
+  // Actualizar estado del checkbox cuando cambia la página
+  useEffect(() => {
+    const currentPageIds = getCurrentPageIds();
+    const allCurrentSelected = currentPageIds.every(id => selectedForPrint.has(id));
+    setSelectAll(allCurrentSelected && currentPageIds.length > 0);
+  }, [currentPage, selectedForPrint, filteredPayrolls]);
+
   // Manejar clicks en botones de acciones y checkboxes
   useEffect(() => {
     const handleActionClick = (e: any) => {
@@ -161,6 +168,13 @@ export default function PayrollPage() {
     }
   };
 
+  // Calcular los IDs de la página actual
+  const getCurrentPageIds = () => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredPayrolls.slice(startIndex, endIndex).map((p: any) => p.id);
+  };
+
   const handleTogglePayrollSelection = (payrollId: string) => {
     const newSelected = new Set(selectedForPrint);
     if (newSelected.has(payrollId)) {
@@ -171,13 +185,13 @@ export default function PayrollPage() {
     setSelectedForPrint(newSelected);
     
     // Verificar si todos los de la página actual están seleccionados
-    const currentPageIds = filteredPayrolls.map((p: any) => p.id);
+    const currentPageIds = getCurrentPageIds();
     const allCurrentSelected = currentPageIds.every(id => newSelected.has(id));
     setSelectAll(allCurrentSelected && currentPageIds.length > 0);
   };
 
   const handleSelectAllToggle = () => {
-    const currentPageIds = filteredPayrolls.map((p: any) => p.id);
+    const currentPageIds = getCurrentPageIds();
     
     if (selectAll) {
       // Deseleccionar solo los de la página actual
@@ -194,7 +208,7 @@ export default function PayrollPage() {
     }
   };
 
-  const handlePrintSelected = () => {
+  const handlePrintSelected = async () => {
     if (selectedForPrint.size === 0) {
       showError('Por favor selecciona al menos un rol de pago');
       return;
@@ -202,7 +216,7 @@ export default function PayrollPage() {
 
     const payrollsToPrint = filteredPayrolls.filter((p: any) => selectedForPrint.has(p.id));
     setPdfProgress({ current: 0, total: payrollsToPrint.length });
-    generateMultiplePayrollPDFsAsOne(payrollsToPrint, undefined, (current, total) => {
+    await generateMultiplePayrollPDFsAsOne(payrollsToPrint, undefined, (current, total) => {
       setPdfProgress({ current, total });
       if (current === total) {
         setTimeout(() => setPdfProgress(null), 1000);
@@ -210,14 +224,14 @@ export default function PayrollPage() {
     });
   };
 
-  const handlePrintAllFiltered = () => {
+  const handlePrintAllFiltered = async () => {
     if (filteredPayrolls.length === 0) {
       showError('No hay roles de pago para imprimir');
       return;
     }
 
     setPdfProgress({ current: 0, total: filteredPayrolls.length });
-    generateMultiplePayrollPDFsAsOne(filteredPayrolls, undefined, (current, total) => {
+    await generateMultiplePayrollPDFsAsOne(filteredPayrolls, undefined, (current, total) => {
       setPdfProgress({ current, total });
       if (current === total) {
         setTimeout(() => setPdfProgress(null), 1000);
@@ -784,6 +798,10 @@ export default function PayrollPage() {
           </div>
         </div>
       )}
+
+      <div style={{ marginTop: '20px', color: theme === 'light' ? '#666' : '#9ca3af', fontSize: '14px' }}>
+        Total de registros: <strong>{payrolls.length}</strong>
+      </div>
 
       {/* Modal de Progreso PDF */}
       {pdfProgress && (

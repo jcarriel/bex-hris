@@ -224,7 +224,8 @@ export default function LeavesPage() {
   const handlePrintVacation = async (leave: any) => {
     try {
       const employee = employees.find((emp: any) => emp.id === leave.employeeId);
-      if (employee && leave.type === 'vacation') {
+      if (employee && leave.type === 'vacation') 
+      {
         await generateVacationDocument({
           employeeName: `${employee.firstName} ${employee.lastName}`,
           employeeCedula: employee.cedula,

@@ -139,6 +139,22 @@ export interface Attendance {
   updatedAt: string;
 }
 
+// Marcación (Attendance Records) Types
+export interface Marcacion {
+  id: string;
+  cedula: string;
+  employeeName: string;
+  department: string;
+  month: number;
+  date: string;
+  dailyAttendance: string;
+  firstCheckIn?: string;
+  lastCheckOut?: string;
+  totalTime?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Leave Types
 export interface Leave {
   id: string;

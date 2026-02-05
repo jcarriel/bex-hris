@@ -256,7 +256,7 @@ const generatePayrollPDFContent = (payroll: PayrollData, companyName: string = '
         .signature-line {
           border-top: 1px solid #333;
           flex: 1;
-          margin-bottom: 0px;
+          margin-bottom: 5px;
         }
         .signature-label {
           font-size: 11px;
@@ -369,7 +369,7 @@ const generatePayrollPDF = (payroll: PayrollData, companyName?: string) => {
 };
 
 
-export const generateMultiplePayrollPDFsAsOne = (
+export const generateMultiplePayrollPDFsAsOne = async (
   payrolls: PayrollData[],
   companyName?: string,
   onProgress?: (current: number, total: number) => void
@@ -377,85 +377,73 @@ export const generateMultiplePayrollPDFsAsOne = (
   const monthName = monthNames[payrolls[0]?.month - 1] || 'Período';
   const year = payrolls[0]?.year || new Date().getFullYear();
   const total = payrolls.length;
+  const batchSize = 10; // Procesar en lotes de 10 PDFs
 
-  // Generar contenido HTML de todas las páginas
-  let allContent = '';
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: true,
+  });
+
+  let isFirstPage = true;
+  let processedCount = 0;
+
+  // Procesar cada payroll
   for (let i = 0; i < payrolls.length; i++) {
-    const content = generatePayrollPDFContent(payrolls[i], companyName);
-    // Remover etiquetas HTML externas y convertir container a page
-    const pageContent = content
-      .replace(/<html>|<\/html>|<head>[\s\S]*?<\/head>|<body>|<\/body>/g, '')
-      .replace('<div class="container">', '<div class="page">');
-    allContent += pageContent;
+    const payroll = payrolls[i];
+    const content = generatePayrollPDFContent(payroll, companyName);
     
-    // Llamar callback de progreso
-    if (onProgress) {
-      onProgress(i + 1, total);
+    // Crear elemento temporal para renderizar
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.top = '-9999px';
+    tempDiv.style.width = '210mm';
+    tempDiv.style.height = '297mm';
+    document.body.appendChild(tempDiv);
+
+    try {
+      // Renderizar a canvas
+      const canvas = await html2canvas(tempDiv, {
+        scale: 1.5,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+
+      // Convertir canvas a imagen
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      if (!isFirstPage) {
+        pdf.addPage();
+      }
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      isFirstPage = false;
+
+      processedCount++;
+      if (onProgress) {
+        onProgress(processedCount, total);
+      }
+    } catch (error) {
+      console.error(`Error rendering payroll ${i}:`, error);
+    } finally {
+      // Limpiar elemento temporal
+      document.body.removeChild(tempDiv);
+    }
+
+    // Permitir que el navegador respire cada 10 PDFs
+    if ((i + 1) % batchSize === 0) {
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
 
-  // Crear HTML consolidado con todas las páginas
-  const consolidatedHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Arial', sans-serif; color: #333; background: white; }
-        .page { page-break-after: always; width: 80%; max-width: 800px; margin: 0 auto; padding: 5px; background: white; min-height: 45vh; display: flex; flex-direction: column; }
-        .page:last-child { page-break-after: avoid; }
-        .header { border: 1px solid #333; padding: 10px; margin-bottom: 1px; }
-        .company-info { margin-bottom: 1px; }
-        .company-name { font-weight: bold; font-size: 10px; margin-bottom: 1px; }
-        .company-details { font-size: 10px; color: #666; line-height: 1.2; }
-        .title { text-align: center; font-size: 12px; font-weight: bold; margin: 2px 0; color: #333; }
-        .period { text-align: center; font-size: 11px; color: #666; margin-bottom: 1px; }
-        .employee-section { margin-bottom: 1px; padding-bottom: 1px; border-bottom: 1px solid #ddd; }
-        .employee-label { font-weight: bold; font-size: 10px; margin-bottom: 1px; }
-        .employee-info { font-size: 11px; line-height: 1.6; }
-        .work-days { text-align: right; font-size: 10px; margin-top: 1px; }
-        .content { display: flex; gap: 40px; margin-bottom: 1px; }
-        .column { flex: 1; }
-        .column-title { font-weight: bold; font-size: 12px; margin-bottom: 1px; padding-bottom: 4px; border-bottom: 2px solid #333; }
-        .income-title { border-bottom-color: #333; color: #000; }
-        .deduction-title { border-bottom-color: #333; color: #000; }
-        .item-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 1px; padding-bottom: 1px; }
-        .item-label { flex: 1; }
-        .item-value { text-align: right; min-width: 80px; font-weight: 500; }
-        .total-row { display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-top: 1px; padding-top: 5px; border-top: 1px solid #333; color: #000; }
-        .total-label { flex: 1; }
-        .total-value { text-align: right; min-width: 80px; }
-        .total-income-value { color: #000; font-weight: bold; }
-        .total-deduction-value { color: #000; font-weight: bold; }
-        .net-pay-section { border-top: 3px solid #333; border-bottom: 3px solid #333; padding: 10px 0; margin: 10px 0 10px 0; display: flex; justify-content: space-between; align-items: center; }
-        .net-pay-label { font-weight: bold; font-size: 12px; color: #000; }
-        .net-pay-value { font-size: 14px; font-weight: bold; color: #000; }
-        .signature-section { display: flex; justify-content: space-between; margin-top: 30px; gap: 40px; flex-grow: 1; align-items: flex-end; padding-top: 25px; }
-        .signature-block { flex: 1; text-align: center; flex-direction: column; height: 140px; }
-        .signature-line { border-top: 1px solid #333; flex: 1; margin-bottom: 0px; }
-        .signature-label { font-size: 11px; font-weight: bold; color: #000; margin-bottom: 0px; margin-top: 0px; }
-        .signature-name { font-size: 11px; color: #000; margin-top: 0px; }
-      </style>
-    </head>
-    <body>
-      ${allContent}
-    </body>
-    </html>
-  `;
-
-  const element = document.createElement('div');
-  element.innerHTML = consolidatedHTML;
-
-  const opt = {
-    margin: 0,
-    filename: `Roles_Pago_${monthName}_${year}.pdf`,
-    image: { type: 'jpeg', quality: 1 },
-    html2canvas: { scale: 1.5, useCORS: true, allowTaint: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-  };
-
-  html2pdf().set(opt).from(element).save();
+  // Guardar PDF
+  pdf.save(`Roles_Pago_${monthName}_${year}.pdf`);
 };
 
 export default generatePayrollPDF;

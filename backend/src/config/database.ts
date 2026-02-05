@@ -136,6 +136,29 @@ async function runMigrations(db: Database): Promise<void> {
       console.error('Error ensuring payroll table:', error);
     }
 
+    // Add positionId and workHours columns to departmentScheduleConfig if they don't exist
+    try {
+      await db.exec(`ALTER TABLE departmentScheduleConfig ADD COLUMN positionId TEXT`);
+      console.log('Added positionId column to departmentScheduleConfig table');
+    } catch (error: any) {
+      if (error.message && error.message.includes('duplicate column')) {
+        console.log('positionId column already exists');
+      } else {
+        console.error('Error adding positionId column:', error);
+      }
+    }
+
+    try {
+      await db.exec(`ALTER TABLE departmentScheduleConfig ADD COLUMN workHours REAL DEFAULT 9`);
+      console.log('Added workHours column to departmentScheduleConfig table');
+    } catch (error: any) {
+      if (error.message && error.message.includes('duplicate column')) {
+        console.log('workHours column already exists');
+      } else {
+        console.error('Error adding workHours column:', error);
+      }
+    }
+
     console.log('Migrations completed successfully');
   } catch (error) {
     console.error('Error running migrations:', error);
@@ -157,6 +180,12 @@ async function createIndexes(db: Database): Promise<void> {
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date)`);
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_attendance_status ON attendance(status)`);
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_attendance_employeeId_date ON attendance(employeeId, date)`);
+
+    // Marcación indexes
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_marcacion_cedula ON marcacion(cedula)`);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_marcacion_date ON marcacion(date)`);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_marcacion_month ON marcacion(month)`);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_marcacion_cedula_date ON marcacion(cedula, date)`);
 
     // Leaves indexes
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_leaves_employeeId ON leaves(employeeId)`);
@@ -218,6 +247,23 @@ async function createTables(db: Database): Promise<void> {
       description TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
+    )
+  `);
+
+  // Department Schedule Configuration table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS departmentScheduleConfig (
+      id TEXT PRIMARY KEY,
+      departmentId TEXT NOT NULL UNIQUE,
+      entryTimeMin TEXT NOT NULL DEFAULT '06:30',
+      entryTimeMax TEXT NOT NULL DEFAULT '07:30',
+      exitTimeMin TEXT NOT NULL DEFAULT '15:30',
+      exitTimeMax TEXT NOT NULL DEFAULT '16:30',
+      totalTimeMin TEXT NOT NULL DEFAULT '08:45',
+      totalTimeMax TEXT NOT NULL DEFAULT '09:15',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE CASCADE
     )
   `);
 
@@ -355,6 +401,25 @@ async function createTables(db: Database): Promise<void> {
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (employeeId) REFERENCES employees(id),
       UNIQUE(employeeId, date)
+    )
+  `);
+
+  // Marcación (Attendance Records) table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS marcacion (
+      id TEXT PRIMARY KEY,
+      cedula TEXT NOT NULL,
+      employeeName TEXT NOT NULL,
+      department TEXT NOT NULL,
+      month INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      dailyAttendance TEXT NOT NULL,
+      firstCheckIn TEXT,
+      lastCheckOut TEXT,
+      totalTime TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      UNIQUE(cedula, date)
     )
   `);
 

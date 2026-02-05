@@ -488,31 +488,41 @@ export default function EmployeesPage() {
         >
           {showForm ? '✕ Cancelar' : '+ Nuevo Empleado'}
         </button>
-        {/* <button
+
+        <button
           onClick={() => {
-            showConfirm('¿Estás seguro de que deseas limpiar la tabla de empleados? Esta acción no se puede deshacer.', async () => {
+            showConfirm('¿Estás seguro de que deseas eliminar todos los empleados? Esta acción no se puede deshacer.', async () => {
               try {
+                setLoading(true);
                 await api.client.delete('/employees/clear');
-                fetchEmployees();
-                showSuccess('Tabla de empleados limpiada exitosamente');
+                await fetchEmployees();
+                showSuccess('Todos los empleados han sido eliminados exitosamente');
               } catch (error) {
                 console.error('Error clearing employees:', error);
-                showError('Error al limpiar la tabla de empleados');
+                showError('Error al eliminar los empleados');
+              } finally {
+                setLoading(false);
               }
             });
           }}
+          disabled={loading}
           style={{
             padding: '10px 20px',
             background: '#dc3545',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
-            cursor: 'pointer',
+            cursor: loading ? 'not-allowed' : 'pointer',
             fontSize: '14px',
+            fontWeight: '500',
+            opacity: loading ? 0.6 : 1,
+            transition: 'all 0.2s',
           }}
+          onMouseEnter={(e) => !loading && (e.currentTarget.style.background = '#bb2d3b')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#dc3545')}
         >
-          🗑 Limpiar Tabla
-        </button> */}
+          🗑️ Eliminar todos los Empleados
+        </button>
       </div>
 
       {showForm && (
@@ -716,6 +726,10 @@ export default function EmployeesPage() {
           excludeColumns={[9]}
           />
       )}
+
+      <div style={{ marginTop: '20px', color: theme === 'light' ? '#666' : '#9ca3af', fontSize: '14px' }}>
+        Total de registros: <strong>{filteredEmployees.length}</strong>
+      </div>
       
       <style>{`
         .action-btn {

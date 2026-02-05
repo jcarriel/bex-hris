@@ -5,7 +5,7 @@ import { useThemeStore } from '../stores/themeStore';
 import api from '../services/api';
 import EmployeesPage from './EmployeesPage';
 import PayrollPage from './PayrollPage';
-import AttendancePage from './AttendancePage';
+import MarcacionPage from './MarcacionPage';
 import LeavesPage from './LeavesPage';
 import ReportsPage from './ReportsPage';
 import AdministrationPage from './AdministrationPage';
@@ -168,13 +168,13 @@ export default function DashboardPage() {
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'employees', label: 'Empleados', icon: '👥' },
     { id: 'payroll', label: 'Nómina', icon: '💰' },
-    { id: 'bulkUpload', label: 'Carga Masiva', icon: '📥' },
+    { id: 'marcacion', label: 'Marcación', icon: '⏱️' },
     { id: 'administration', label: 'Administración', icon: '⚙️' },
-    { id: 'documents', label: 'Documentos', icon: '📄' },
-    { id: 'documentGenerator', label: 'Generador de Docs', icon: '✍️' },
-    { id: 'attendance', label: 'Asistencia', icon: '📋' },
-    { id: 'leaves', label: 'Licencias', icon: '🏖️' },
-    { id: 'reports', label: 'Reportes', icon: '📈' },
+    { id: 'bulkUpload', label: 'Carga Masiva', icon: '📥' },
+    // { id: 'documents', label: 'Documentos', icon: '📄' },
+    // { id: 'documentGenerator', label: 'Generador de Docs', icon: '✍️' },
+    // { id: 'leaves', label: 'Licencias', icon: '🏖️' },
+    // { id: 'reports', label: 'Reportes', icon: '📈' },
     { id: 'settings', label: 'Configuración', icon: '⚙️' },
   ];
 
@@ -466,7 +466,7 @@ export default function DashboardPage() {
           {activeTab === 'administration' && <AdministrationPage />}
           {activeTab === 'documents' && <DocumentsPage />}
           {activeTab === 'documentGenerator' && <DocumentGeneratorPage />}
-          {activeTab === 'attendance' && <AttendancePage />}
+          {activeTab === 'marcacion' && <MarcacionPage />}
           {activeTab === 'leaves' && <LeavesPage />}
           {activeTab === 'reports' && <ReportsPage />}
           {activeTab === 'settings' && <SettingsPage />}

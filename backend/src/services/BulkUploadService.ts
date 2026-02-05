@@ -6,7 +6,7 @@ import logger from '@utils/logger';
 import type { Employee } from '../types';
 
 export class BulkUploadService {
-  async processEmployeeFile(fileBuffer: Buffer, fileName: string): Promise<{
+  async processEmployeeFile(fileBuffer: Buffer, fileName: string, status: string = 'active'): Promise<{
     processedCount: number;
     createdCount: number;
     updatedCount: number;
@@ -19,7 +19,7 @@ export class BulkUploadService {
       let createdCount = 0;
       let updatedCount = 0;
 
-      logger.info(`Processing employee file: ${fileName}`);
+      logger.info(`Processing employee file: ${fileName}, Status: ${status}`);
 
       // Parse CSV
       const csvText = fileBuffer.toString('utf-8');
@@ -122,6 +122,7 @@ export class BulkUploadService {
 
           // Preparar datos del empleado
           const genderValue: 'M' | 'F' | 'O' = gender === 'F' ? 'F' : gender === 'M' ? 'M' : 'O';
+          const employeeStatus: 'active' | 'inactive' = status === 'inactive' ? 'inactive' : 'active';
           const employeeData = {
             firstName,
             lastName,
@@ -144,7 +145,7 @@ export class BulkUploadService {
             currentContract: currentContract || '',
             contractEndDate: contractEndDate ? this.formatDate(contractEndDate) : undefined,
             employeeNumber: `EMP-${cedula}`,
-            status: 'active' as const,
+            status: employeeStatus,
           };
 
           try {

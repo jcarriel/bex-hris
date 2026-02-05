@@ -72,6 +72,13 @@ app.get('/api/departments', authMiddleware, (req, res) => ResourceController.get
 app.put('/api/departments/:id', authMiddleware, (req, res) => ResourceController.updateDepartment(req, res));
 app.delete('/api/departments/:id', authMiddleware, (req, res) => ResourceController.deleteDepartment(req, res));
 
+// Department Schedule Configuration routes
+app.post('/api/department-schedules', authMiddleware, (req, res) => ResourceController.createOrUpdateDepartmentSchedule(req, res));
+app.get('/api/department-schedules', authMiddleware, (req, res) => ResourceController.getDepartmentSchedules(req, res));
+app.get('/api/department-schedules/:id', authMiddleware, (req, res) => ResourceController.getDepartmentScheduleById(req, res));
+app.get('/api/department-schedules/department/:departmentId', authMiddleware, (req, res) => ResourceController.getDepartmentScheduleByDepartmentId(req, res));
+app.delete('/api/department-schedules/:id', authMiddleware, (req, res) => ResourceController.deleteDepartmentSchedule(req, res));
+
 // Position routes
 app.post('/api/positions', authMiddleware, (req, res) => ResourceController.createPosition(req, res));
 app.get('/api/positions', authMiddleware, (req, res) => ResourceController.getPositions(req, res));
@@ -121,6 +128,20 @@ app.get('/api/attendance', authMiddleware, (req, res) => {
     return ResourceController.getAllAttendance(req, res);
   }
 });
+
+// Marcación (Attendance Records) routes
+app.get('/api/marcacion/periods', authMiddleware, (req, res) => ResourceController.getMarcacionPeriods(req, res));
+app.get('/api/marcacion/period/data', authMiddleware, (req, res) => ResourceController.getMarcacionByPeriod(req, res));
+app.post('/api/marcacion', authMiddleware, (req, res) => ResourceController.createMarcacion(req, res));
+app.get('/api/marcacion', authMiddleware, (req, res) => ResourceController.getAllMarcacion(req, res));
+app.get('/api/marcacion/:id', authMiddleware, (req, res) => ResourceController.getMarcacion(req, res));
+app.get('/api/marcacion/cedula/:cedula', authMiddleware, (req, res) => ResourceController.getMarcacionByCedula(req, res));
+app.get('/api/marcacion/month/:month', authMiddleware, (req, res) => ResourceController.getMarcacionByMonth(req, res));
+app.get('/api/marcacion/cedula/:cedula/month/:month', authMiddleware, (req, res) => ResourceController.getMarcacionByCedulaAndMonth(req, res));
+app.put('/api/marcacion/:id', authMiddleware, (req, res) => ResourceController.updateMarcacion(req, res));
+app.delete('/api/marcacion/period', authMiddleware, (req, res) => ResourceController.deleteMarcacionByPeriod(req, res));
+app.delete('/api/marcacion/month/:month', authMiddleware, (req, res) => ResourceController.deleteMarcacionByMonth(req, res));
+app.delete('/api/marcacion/:id', authMiddleware, (req, res) => ResourceController.deleteMarcacion(req, res));
 
 // Leave routes
 app.get('/api/leaves', authMiddleware, (req, res) => ResourceController.getAllLeaves(req, res));

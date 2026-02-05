@@ -14,7 +14,9 @@ import { TaskService } from '@services/TaskService';
 import NotificationScheduleService from '@services/NotificationScheduleService';
 import SchedulerService from '@services/SchedulerService';
 import DocumentGeneratorService from '../services/DocumentGeneratorService';
+import DepartmentScheduleService from '@services/DepartmentScheduleService';
 import logger from '@utils/logger';
+import { getDatabase } from '@config/database';
 
 export class ResourceController {
   // ===== DEPARTMENTS =====
@@ -1088,10 +1090,10 @@ export class ResourceController {
   async bulkUpload(req: AuthRequest, res: Response): Promise<void> {
     try {
       logger.info('Bulk upload request received');
-      const { type } = req.body;
+      const { type, status } = req.body;
       const file = (req as any).file;
 
-      logger.info(`Bulk upload - Type: ${type}, File: ${file?.originalname}, Size: ${file?.size}`);
+      logger.info(`Bulk upload - Type: ${type}, Status: ${status}, File: ${file?.originalname}, Size: ${file?.size}`);
 
       if (!type || !file) {
         logger.error('Missing type or file in bulk upload');
@@ -1105,7 +1107,8 @@ export class ResourceController {
         // Procesar archivo de empleados
         const result = await (await import('@services/BulkUploadService')).default.processEmployeeFile(
           file.buffer,
-          file.originalname
+          file.originalname,
+          status || 'active'
         );
         res.status(200).json({ success: true, data: result });
       } else if (type === 'payroll') {
@@ -1118,6 +1121,13 @@ export class ResourceController {
       } else if (type === 'roles') {
         // Procesar archivo de roles
         const result = await (await import('@services/BulkUploadService')).default.processRolesFile(
+          file.buffer,
+          file.originalname
+        );
+        res.status(200).json({ success: true, data: result });
+      } else if (type === 'attendance' || type === 'marcacion') {
+        // Procesar archivo de marcación (asistencia)
+        const result = await (await import('@services/AttendanceBulkUploadService')).default.processAttendanceFile(
           file.buffer,
           file.originalname
         );
@@ -1377,6 +1387,301 @@ export class ResourceController {
       });
     } catch (error) {
       logger.error('Register not found employees error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  // ===== MARCACIÓN (ATTENDANCE RECORDS) =====
+  async getMarcacion(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcacion = await MarcacionService.getMarcacion(id);
+      if (!marcacion) {
+        res.status(404).json({ success: false, message: 'Marcación not found' });
+        return;
+      }
+      res.status(200).json({ success: true, data: marcacion });
+    } catch (error) {
+      logger.error('Get marcacion error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getMarcacionByCedula(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { cedula } = req.params;
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcaciones = await MarcacionService.getMarcacionByCedula(cedula);
+      res.status(200).json({ success: true, data: marcaciones });
+    } catch (error) {
+      logger.error('Get marcacion by cedula error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getMarcacionByMonth(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { month } = req.params;
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcaciones = await MarcacionService.getMarcacionByMonth(parseInt(month));
+      res.status(200).json({ success: true, data: marcaciones });
+    } catch (error) {
+      logger.error('Get marcacion by month error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getMarcacionByCedulaAndMonth(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { cedula, month } = req.params;
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcaciones = await MarcacionService.getMarcacionByCedulaAndMonth(cedula, parseInt(month));
+      res.status(200).json({ success: true, data: marcaciones });
+    } catch (error) {
+      logger.error('Get marcacion by cedula and month error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getAllMarcacion(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcaciones = await MarcacionService.getAllMarcacion();
+      res.status(200).json({ success: true, data: marcaciones });
+    } catch (error) {
+      logger.error('Get all marcacion error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async createMarcacion(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcacion = await MarcacionService.createMarcacion(req.body);
+      res.status(201).json({ success: true, data: marcacion });
+    } catch (error) {
+      logger.error('Create marcacion error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async updateMarcacion(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcacion = await MarcacionService.updateMarcacion(id, req.body);
+      if (!marcacion) {
+        res.status(404).json({ success: false, message: 'Marcación not found' });
+        return;
+      }
+      res.status(200).json({ success: true, data: marcacion });
+    } catch (error) {
+      logger.error('Update marcacion error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async deleteMarcacion(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const success = await MarcacionService.deleteMarcacion(id);
+      if (!success) {
+        res.status(404).json({ success: false, message: 'Marcación not found' });
+        return;
+      }
+      res.status(200).json({ success: true, message: 'Marcación deleted successfully' });
+    } catch (error) {
+      logger.error('Delete marcacion error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async deleteMarcacionByMonth(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { month } = req.params;
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const success = await MarcacionService.deleteMarcacionByMonth(parseInt(month));
+      res.status(200).json({ success: true, message: 'Marcación records deleted successfully' });
+    } catch (error) {
+      logger.error('Delete marcacion by month error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async deleteMarcacionByPeriod(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        res.status(400).json({ success: false, message: 'startDate and endDate are required' });
+        return;
+      }
+
+      const db = getDatabase();
+      const result = await db.run(
+        `DELETE FROM marcacion WHERE date >= ? AND date <= ?`,
+        [startDate, endDate]
+      );
+
+      res.status(200).json({ 
+        success: true, 
+        message: 'Marcación records deleted successfully',
+        deletedCount: result.changes || 0
+      });
+    } catch (error) {
+      logger.error('Delete marcacion by period error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getMarcacionPeriods(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const periods = await MarcacionService.getAvailablePeriods();
+      res.status(200).json({ success: true, data: periods });
+    } catch (error) {
+      logger.error('Get marcacion periods error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getMarcacionByPeriod(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { startDate, endDate } = req.query;
+      if (!startDate || !endDate) {
+        res.status(400).json({ success: false, message: 'startDate and endDate are required' });
+        return;
+      }
+      const MarcacionService = (await import('@services/MarcacionService')).default;
+      const marcaciones = await MarcacionService.getMarcacionByPeriod(startDate as string, endDate as string);
+      res.status(200).json({ success: true, data: marcaciones });
+    } catch (error) {
+      logger.error('Get marcacion by period error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  // ===== DEPARTMENT SCHEDULE CONFIGURATION =====
+  async createOrUpdateDepartmentSchedule(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { departmentId, positionId, entryTimeMin, entryTimeMax, exitTimeMin, exitTimeMax, totalTimeMin, totalTimeMax, workHours } = req.body;
+
+      if (!departmentId) {
+        res.status(400).json({ success: false, message: 'departmentId is required' });
+        return;
+      }
+
+      if (!positionId) {
+        res.status(400).json({ success: false, message: 'positionId is required' });
+        return;
+      }
+
+      // Validar formato de horas (HH:MM) para entrada y salida
+      const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+      const entryExitTimes = [entryTimeMin, entryTimeMax, exitTimeMin, exitTimeMax];
+      
+      for (const time of entryExitTimes) {
+        if (time && !timeRegex.test(time)) {
+          res.status(400).json({ success: false, message: `Invalid time format: ${time}. Use HH:MM format` });
+          return;
+        }
+      }
+
+      // Validar que totalTimeMin y totalTimeMax sean números
+      if (totalTimeMin !== undefined && totalTimeMin !== null && isNaN(Number(totalTimeMin))) {
+        res.status(400).json({ success: false, message: `Invalid totalTimeMin: ${totalTimeMin}. Debe ser un numero (minutes)` });
+        return;
+      }
+      if (totalTimeMax !== undefined && totalTimeMax !== null && isNaN(Number(totalTimeMax))) {
+        res.status(400).json({ success: false, message: `Invalid totalTimeMax: ${totalTimeMax}. Debe ser un numero (minutes)` });
+        return;
+      }
+
+      // Validar que workHours sea un número
+      if (workHours !== undefined && workHours !== null && isNaN(Number(workHours))) {
+        res.status(400).json({ success: false, message: `Invalid workHours: ${workHours}. Debe ser un numero` });
+        return;
+      }
+
+      const scheduleService = new DepartmentScheduleService();
+
+      const config = await scheduleService.createOrUpdate(departmentId, {
+        departmentId,
+        positionId: positionId || undefined,
+        entryTimeMin: entryTimeMin || '06:30',
+        entryTimeMax: entryTimeMax || '07:30',
+        exitTimeMin: exitTimeMin || '15:30',
+        exitTimeMax: exitTimeMax || '16:30',
+        totalTimeMin: Number(totalTimeMin) || 15,
+        totalTimeMax: Number(totalTimeMax) || 15,
+        workHours: Number(workHours) || 9,
+      });
+
+      res.status(201).json({ success: true, data: config });
+    } catch (error) {
+      logger.error('Create/Update department schedule error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getDepartmentSchedules(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const scheduleService = new DepartmentScheduleService();
+      const configs = await scheduleService.getAllWithDepartments();
+      res.status(200).json({ success: true, data: configs });
+    } catch (error) {
+      logger.error('Get department schedules error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getDepartmentScheduleById(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const scheduleService = new DepartmentScheduleService();
+      const config = await scheduleService.getById(id);
+
+      if (!config) {
+        res.status(404).json({ success: false, message: 'Schedule configuration not found' });
+        return;
+      }
+
+      res.status(200).json({ success: true, data: config });
+    } catch (error) {
+      logger.error('Get department schedule error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getDepartmentScheduleByDepartmentId(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { departmentId } = req.params;
+      const scheduleService = new DepartmentScheduleService();
+      const config = await scheduleService.getWithDefaults(departmentId);
+
+      res.status(200).json({ success: true, data: config });
+    } catch (error) {
+      logger.error('Get department schedule by department error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async deleteDepartmentSchedule(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const scheduleService = new DepartmentScheduleService();
+      const deleted = await scheduleService.delete(id);
+
+      if (!deleted) {
+        res.status(404).json({ success: false, message: 'Schedule configuration not found' });
+        return;
+      }
+
+      res.status(200).json({ success: true, message: 'Schedule configuration deleted' });
+    } catch (error) {
+      logger.error('Delete department schedule error', error);
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
     }
   }

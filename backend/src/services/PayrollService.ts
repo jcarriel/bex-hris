@@ -51,14 +51,11 @@ export class PayrollService {
 
   async getPayrollByPeriod(period: string): Promise<Payroll[]> {
     try {
-      logger.info(`getPayrollByPeriod called with period: "${period}"`);
       const [yearStr, monthStr] = period.includes('/') ? period.split('/') : period.split('-');
       const year = parseInt(yearStr, 10);
       const month = parseInt(monthStr, 10);
       if (isNaN(year) || isNaN(month)) throw new Error(`Invalid period: ${period}`);
-      logger.info(`Fetching payroll for period: ${year}/${month}`);
       const result = await PayrollRepository.findByPeriod(year, month);
-      logger.info(`Found ${result.length} payroll records for ${year}/${month}`);
       return result;
     } catch (error) {
       logger.error('Error getting payroll by period:', error instanceof Error ? error.message : error);
@@ -69,7 +66,6 @@ export class PayrollService {
   async updatePayroll(id: string, data: Partial<Payroll>): Promise<Payroll | null> {
     try {
       const payroll = await PayrollRepository.update(id, data);
-      logger.info(`Payroll updated: ${id}`);
       return payroll;
     } catch (error) {
       logger.error('Error updating payroll', error);

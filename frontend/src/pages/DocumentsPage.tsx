@@ -53,9 +53,6 @@ export default function DocumentsPage() {
       const docsData = docsRes.data.data || [];
       const empsData = empsRes.data.data || [];
       
-      console.log('Documents:', docsData);
-      console.log('Employees:', empsData);
-      
       setDocuments(docsData);
       setEmployees(empsData);
     } catch (error) {

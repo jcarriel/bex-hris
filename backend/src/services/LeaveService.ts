@@ -25,6 +25,7 @@ export class LeaveService {
 
   async getLeaveByEmployee(employeeId: string): Promise<Leave[]> {
     try {
+      console.log("entra 1")
       return await LeaveRepository.findByEmployee(employeeId);
     } catch (error) {
       logger.error('Error getting leave by employee', error);

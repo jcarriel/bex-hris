@@ -13,6 +13,11 @@ export default function AdministrationPage() {
   const [categories, setCategories] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [payrollData, setPayrollData] = useState<any[]>([]);
+  const [loadingPayroll, setLoadingPayroll] = useState(false);
+  const [generarOption, setGenerarOption] = useState<'marcaciones' | 'horas_extras'>('marcaciones');
+  const [generatingExcel, setGeneratingExcel] = useState(false);
+  const [scheduleConfigs, setScheduleConfigs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -23,6 +28,18 @@ export default function AdministrationPage() {
   const [laborFormData, setLaborFormData] = useState({ name: '', description: '', positionId: '' });
   const [catFormData, setCatFormData] = useState({ name: '', description: '' });
   const [taskFormData, setTaskFormData] = useState({ title: '', description: '', dueDate: '', priority: 'medium' });
+  const [scheduleFormData, setScheduleFormData] = useState({
+    departmentId: '',
+    positionId: '',
+    entryTimeMin: '06:30',
+    entryTimeMax: '07:30',
+    exitTimeMin: '15:30',
+    exitTimeMax: '16:30',
+    totalTimeMin: '15',
+    totalTimeMax: '15',
+    workHours: '9',
+  });
+  const [filteredPositions, setFilteredPositions] = useState<any[]>([]);
 
   useEffect(() => {
     fetchAllData();
@@ -31,24 +48,94 @@ export default function AdministrationPage() {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      const [deptRes, posRes, catRes, tasksRes, empsRes] = await Promise.all([
+      const [deptRes, posRes, catRes, tasksRes, empsRes, schedulesRes] = await Promise.all([
         api.client.get('/departments'),
         api.client.get('/positions'),
         api.client.get('/document-categories'),
         api.client.get('/tasks'),
         api.client.get('/employees'),
+        api.client.get('/department-schedules'),
       ]);
       setDepartments(deptRes.data.data || []);
       setPositions(posRes.data.data || []);
       setCategories(catRes.data.data || []);
       setTasks(tasksRes.data.data || []);
       setEmployees(empsRes.data.data || []);
+      const scheduleData = schedulesRes.data.data || [];
+      setScheduleConfigs(Array.isArray(scheduleData) ? scheduleData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       showError('Error al cargar los datos');
     } finally {
       setLoading(false);
     }
+  };
+
+  // ===== DEPARTMENT SCHEDULE CONFIGURATION =====
+  const handleScheduleSubmit = async (e: any) => {
+    e.preventDefault();
+    try {
+      if (!scheduleFormData.departmentId) {
+        showError('Por favor selecciona un Centro de Costo');
+        return;
+      }
+      if (!scheduleFormData.positionId) {
+        showError('Por favor selecciona un Cargo');
+        return;
+      }
+
+      await api.client.post('/department-schedules', scheduleFormData);
+      showSuccess('Configuración de horario guardada exitosamente');
+      setScheduleFormData({
+        departmentId: '',
+        positionId: '',
+        entryTimeMin: '06:30',
+        entryTimeMax: '07:30',
+        exitTimeMin: '15:30',
+        exitTimeMax: '16:30',
+        totalTimeMin: '15',
+        totalTimeMax: '15',
+        workHours: '9',
+      });
+      setShowForm(false);
+      fetchAllData();
+    } catch (error: any) {
+      console.error('Error:', error);
+      showError(error.response?.data?.message || 'Error al guardar la configuración');
+    }
+  };
+
+  const editSchedule = (config: any) => {
+    setScheduleFormData({
+      departmentId: config.departmentId,
+      positionId: config.positionId || '',
+      entryTimeMin: config.entryTimeMin,
+      entryTimeMax: config.entryTimeMax,
+      exitTimeMin: config.exitTimeMin,
+      exitTimeMax: config.exitTimeMax,
+      totalTimeMin: config.totalTimeMin,
+      totalTimeMax: config.totalTimeMax,
+      workHours: config.workHours || '9',
+    });
+    // Filtrar posiciones por departamento
+    const deptPositions = positions.filter((p: any) => p.departmentId === config.departmentId);
+    setFilteredPositions(deptPositions);
+    setEditingId(config.id);
+    setActiveTab('schedules');
+    setShowForm(true);
+  };
+
+  const deleteSchedule = async (id: string) => {
+    showConfirm('¿Estás seguro de que deseas eliminar esta configuración?', async () => {
+      try {
+        await api.client.delete(`/department-schedules/${id}`);
+        fetchAllData();
+        showSuccess('Configuración eliminada exitosamente');
+      } catch (error) {
+        console.error('Error:', error);
+        showError('Error al eliminar la configuración');
+      }
+    });
   };
 
   // ===== DEPARTMENTS =====
@@ -293,6 +380,7 @@ export default function AdministrationPage() {
     { id: 'labors', label: 'Labores', icon: '🎯' },
     { id: 'categories', label: 'Categorías de Documentos', icon: '📁' },
     { id: 'tasks', label: 'Tareas', icon: '📋' },
+    { id: 'schedules', label: 'Configuración de Horarios', icon: '⏰' },
     { id: 'notifications', label: 'Notificaciones', icon: '🔔' },
   ];
 
@@ -330,6 +418,18 @@ export default function AdministrationPage() {
                 setDeptFormData({ name: '', description: '' });
                 setPosFormData({ name: '', description: '', departmentId: '', salaryMin: '', salaryMax: '' });
                 setCatFormData({ name: '', description: '' });
+                setScheduleFormData({
+                  departmentId: '',
+                  positionId: '',
+                  entryTimeMin: '06:30',
+                  entryTimeMax: '07:30',
+                  exitTimeMin: '15:30',
+                  exitTimeMax: '16:30',
+                  totalTimeMin: '15',
+                  totalTimeMax: '15',
+                  workHours: '9',
+                });
+                setFilteredPositions([]);
               }
               setShowForm(!showForm);
             }}
@@ -820,6 +920,227 @@ export default function AdministrationPage() {
                         </button>
                         <button
                           onClick={() => deleteTask(task.id)}
+                          style={{ padding: '4px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          🗑 Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {/* Schedule Configuration Tab */}
+        {activeTab === 'schedules' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: theme === 'light' ? '#f5f7fa' : '#374151', borderBottom: `2px solid ${theme === 'light' ? '#eee' : '#374151'}` }}>
+                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Centro de Costo</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Cargo</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Horas de Trabajo</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Entrada</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Salida</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Tiempo Total</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {showForm && activeTab === 'schedules' && (
+                <>
+                  <tr style={{ background: '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                    <td colSpan={5} style={{ padding: '15px' }}>
+                      <form onSubmit={handleScheduleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: theme === 'light' ? '#333' : '#e5e7eb', fontWeight: '600' }}>Centro de Costo</label>
+                          <select
+                            value={scheduleFormData.departmentId}
+                            onChange={(e) => {
+                              const deptId = e.target.value;
+                              setScheduleFormData({ ...scheduleFormData, departmentId: deptId, positionId: '' });
+                              // Filtrar posiciones por departamento
+                              const deptPositions = positions.filter((p: any) => p.departmentId === deptId);
+                              setFilteredPositions(deptPositions);
+                            }}
+                            disabled={!!editingId}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                            required
+                          >
+                            <option value="">Selecciona un Centro de Costo</option>
+                            {departments.map((dept: any) => (
+                              <option key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: theme === 'light' ? '#333' : '#e5e7eb', fontWeight: '600' }}>Cargo</label>
+                          <select
+                            value={scheduleFormData.positionId}
+                            onChange={(e) => setScheduleFormData({ ...scheduleFormData, positionId: e.target.value })}
+                            disabled={!scheduleFormData.departmentId}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                            required
+                          >
+                            <option value="">Selecciona un Cargo</option>
+                            {filteredPositions.map((pos: any) => (
+                              <option key={pos.id} value={pos.id}>
+                                {pos.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: theme === 'light' ? '#333' : '#e5e7eb', fontWeight: '600' }}>Horas de Trabajo por Día</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="24"
+                            step="0.5"
+                            value={scheduleFormData.workHours}
+                            onChange={(e) => setScheduleFormData({ ...scheduleFormData, workHours: e.target.value })}
+                            placeholder="9"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                            required
+                          />
+                        </div>
+
+                        <div style={{ gridColumn: '1 / 3' }}>
+                          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: theme === 'light' ? '#333' : '#e5e7eb', fontWeight: '600' }}>Horario de Entrada</label>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: theme === 'light' ? '#666' : '#9ca3af' }}>Desde</label>
+                              <input
+                                type="time"
+                                value={scheduleFormData.entryTimeMin}
+                                onChange={(e) => setScheduleFormData({ ...scheduleFormData, entryTimeMin: e.target.value })}
+                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: theme === 'light' ? '#666' : '#9ca3af' }}>Hasta</label>
+                              <input
+                                type="time"
+                                value={scheduleFormData.entryTimeMax}
+                                onChange={(e) => setScheduleFormData({ ...scheduleFormData, entryTimeMax: e.target.value })}
+                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ gridColumn: '3 / 5' }}>
+                          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: theme === 'light' ? '#333' : '#e5e7eb', fontWeight: '600' }}>Horario de Salida</label>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: theme === 'light' ? '#666' : '#9ca3af' }}>Desde</label>
+                              <input
+                                type="time"
+                                value={scheduleFormData.exitTimeMin}
+                                onChange={(e) => setScheduleFormData({ ...scheduleFormData, exitTimeMin: e.target.value })}
+                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: theme === 'light' ? '#666' : '#9ca3af' }}>Hasta</label>
+                              <input
+                                type="time"
+                                value={scheduleFormData.exitTimeMax}
+                                onChange={(e) => setScheduleFormData({ ...scheduleFormData, exitTimeMax: e.target.value })}
+                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: theme === 'light' ? '#333' : '#e5e7eb', fontWeight: '600' }}>Tolerancia de Jornada (9 horas ± minutos)</label>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: theme === 'light' ? '#666' : '#9ca3af' }}>Mínimo (minutos menos)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="60"
+                                value={scheduleFormData.totalTimeMin}
+                                onChange={(e) => setScheduleFormData({ ...scheduleFormData, totalTimeMin: e.target.value })}
+                                placeholder="15"
+                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: theme === 'light' ? '#666' : '#9ca3af' }}>Máximo (minutos más)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="60"
+                                value={scheduleFormData.totalTimeMax}
+                                onChange={(e) => setScheduleFormData({ ...scheduleFormData, totalTimeMax: e.target.value })}
+                                placeholder="15"
+                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: theme === 'light' ? 'white' : '#1f2937', color: theme === 'light' ? '#333' : '#e5e7eb' }}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <button type="submit" style={{ padding: '8px 16px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', gridColumn: '1 / -1', fontWeight: '500', transition: 'background 0.2s' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
+                        >
+                          {editingId ? '✏️ Actualizar' : '✚ Crear'}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                </>
+              )}
+              {scheduleConfigs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                    No hay configuraciones registradas
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  {scheduleConfigs.map((config: any) => (
+                    <tr key={config.id} style={{ borderBottom: `1px solid ${theme === 'light' ? '#eee' : '#374151'}`, background: theme === 'light' ? 'white' : '#111827' }}>
+                      <td style={{ padding: '12px', color: theme === 'light' ? '#333' : '#ffffff' }}>{config.departmentName}</td>
+                      <td style={{ padding: '12px', color: theme === 'light' ? '#333' : '#ffffff' }}>
+                        {config.positionId ? positions.find((p: any) => p.id === config.positionId)?.name || 'N/A' : 'Todos'}
+                      </td>
+                      <td style={{ padding: '12px', color: theme === 'light' ? '#333' : '#ffffff' }}>{config.workHours}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: theme === 'light' ? '#666' : '#9ca3af' }}>
+                        {config.entryTimeMin} - {config.entryTimeMax}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: theme === 'light' ? '#666' : '#9ca3af' }}>
+                        {config.exitTimeMin} - {config.exitTimeMax}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: theme === 'light' ? '#666' : '#9ca3af' }}>
+                        {config.totalTimeMin} - {config.totalTimeMax}
+                      </td>
+                      <td style={{ padding: '12px', display: 'flex', gap: '5px' }}>
+                        <button
+                          onClick={() => editSchedule(config)}
+                          style={{ padding: '4px 12px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', transition: 'background 0.2s' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          onClick={() => deleteSchedule(config.id)}
                           style={{ padding: '4px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
                         >
                           🗑 Eliminar
