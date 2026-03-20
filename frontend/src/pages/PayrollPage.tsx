@@ -22,10 +22,12 @@ export default function PayrollPage() {
   const [selectAll, setSelectAll] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [departments, setDepartments] = useState<any[]>([]);
   const pageSize = 15;
 
   useEffect(() => {
     fetchPayrolls();
+    fetchDepartments();
   }, [year, month]);
 
   useEffect(() => {
@@ -139,8 +141,17 @@ export default function PayrollPage() {
     setFilteredPayrolls(result);
   };
 
-  const departments = Array.from(new Set(payrolls.map((p: any) => p.departmentId))).filter(Boolean);
   const payrollTypes = Array.from(new Set(payrolls.map((p: any) => p.payrollType))).filter(Boolean);
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await api.client.get('/departments');
+      const deptData = response.data.data || [];
+      setDepartments(deptData);
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
 
   const handleDeletePayroll = async (id: string) => {
     try {
@@ -368,8 +379,8 @@ export default function PayrollPage() {
         >
           <option value="">Todos los departamentos</option>
           {departments.map((dept: any) => (
-            <option key={dept} value={dept}>
-              {dept}
+            <option key={dept.id} value={dept.id}>
+              {dept.name}
             </option>
           ))}
         </select>
@@ -496,7 +507,7 @@ export default function PayrollPage() {
             },
             {
               title: 'Sueldo Base',
-              data: 'baseSalary',
+              data: 'earnedSalary',
               render: (data) => `$${data?.toLocaleString() || '-'}`,
             },
             {
@@ -661,7 +672,7 @@ export default function PayrollPage() {
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {[
-                    { label: 'SUELDO', value: selectedPayroll.baseSalary },
+                    { label: 'SUELDO', value: selectedPayroll.earnedSalary },
                     { label: 'FONDOS RESERVA', value: selectedPayroll.reserveFunds || 0 },
                     { label: 'DÉCIMO TERCERO', value: selectedPayroll.twelfthSalary || 0 },
                     { label: 'DÉCIMO CUARTO', value: selectedPayroll.fourteenthSalary || 0 },
@@ -695,7 +706,7 @@ export default function PayrollPage() {
                   color: '#d4a574',
                 }}>
                   <span>Total Ingresos</span>
-                  <span>${((selectedPayroll.baseSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + 
+                  <span>${((selectedPayroll.earnedSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + 
                   (selectedPayroll.responsibilityBonus || 0) + (selectedPayroll.productivityBonus || 0) + (selectedPayroll.foodAllowance || 0) + 
                   (selectedPayroll.otherIncome || 0) + (selectedPayroll.vacation || 0) + (selectedPayroll.overtimeValue50 || 0)).toFixed(2)}</span>
                 </div>
@@ -768,7 +779,7 @@ export default function PayrollPage() {
             }}>
               <span>TOTAL A RECIBIR</span>
               <span style={{ fontSize: '16px' }}>${(
-                ((selectedPayroll.baseSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + (selectedPayroll.responsibilityBonus || 0) + (selectedPayroll.productivityBonus || 0) + (selectedPayroll.foodAllowance || 0) + (selectedPayroll.otherIncome || 0)) + (selectedPayroll.vacation || 0) + (selectedPayroll.overtimeValue50 || 0) -
+                ((selectedPayroll.earnedSalary || 0) + (selectedPayroll.reserveFunds || 0) + (selectedPayroll.twelfthSalary || 0) + (selectedPayroll.fourteenthSalary || 0) + (selectedPayroll.responsibilityBonus || 0) + (selectedPayroll.productivityBonus || 0) + (selectedPayroll.foodAllowance || 0) + (selectedPayroll.otherIncome || 0)) + (selectedPayroll.vacation || 0) + (selectedPayroll.overtimeValue50 || 0) -
                 ((selectedPayroll.advance || 0) + (selectedPayroll.iessContribution || 0) + (selectedPayroll.incomeTax || 0) + (selectedPayroll.iessLoan || 0) + (selectedPayroll.companyLoan || 0) + (selectedPayroll.spouseExtension || 0) + (selectedPayroll.nonWorkDays || 0) + (selectedPayroll.otherDeductions || 0) + (selectedPayroll.foodDeduction || 0))
               ).toFixed(2)}</span>
             </div>

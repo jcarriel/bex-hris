@@ -159,6 +159,119 @@ async function runMigrations(db: Database): Promise<void> {
       }
     }
 
+    // Migration: Recreate departmentScheduleConfig table to remove UNIQUE constraint on departmentId
+    // and add UNIQUE constraint on (departmentId, positionId)
+    try {
+      const tableInfo = await db.all(`PRAGMA table_info(departmentScheduleConfig)`);
+      const hasUniqueConstraint = tableInfo.some((col: any) => col.name === 'departmentId' && col.notnull === 1);
+      
+      // Check if table has the old UNIQUE constraint by trying to insert a duplicate
+      const existingCount = await db.get(
+        `SELECT COUNT(*) as count FROM departmentScheduleConfig WHERE positionId IS NULL`
+      );
+      
+      if (existingCount && existingCount.count > 1) {
+        console.log('Migrating departmentScheduleConfig table to support multiple positions per department...');
+        
+        // Backup existing data
+        await db.exec(`
+          CREATE TABLE IF NOT EXISTS departmentScheduleConfig_backup AS 
+          SELECT * FROM departmentScheduleConfig
+        `);
+        
+        // Drop old table
+        await db.exec(`DROP TABLE departmentScheduleConfig`);
+        
+        // Create new table with correct constraints
+        await db.exec(`
+          CREATE TABLE departmentScheduleConfig (
+            id TEXT PRIMARY KEY,
+            departmentId TEXT NOT NULL,
+            positionId TEXT,
+            entryTimeMin TEXT NOT NULL DEFAULT '06:30',
+            entryTimeMax TEXT NOT NULL DEFAULT '07:30',
+            exitTimeMin TEXT NOT NULL DEFAULT '15:30',
+            exitTimeMax TEXT NOT NULL DEFAULT '16:30',
+            totalTimeMin TEXT NOT NULL DEFAULT '08:45',
+            totalTimeMax TEXT NOT NULL DEFAULT '09:15',
+            workHours REAL DEFAULT 9,
+            createdAt TEXT NOT NULL,
+            updatedAt TEXT NOT NULL,
+            UNIQUE(departmentId, positionId),
+            FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE CASCADE,
+            FOREIGN KEY (positionId) REFERENCES positions(id) ON DELETE CASCADE
+          )
+        `);
+        
+        // Restore data
+        await db.exec(`
+          INSERT INTO departmentScheduleConfig 
+          SELECT id, departmentId, positionId, entryTimeMin, entryTimeMax, exitTimeMin, exitTimeMax, 
+                 totalTimeMin, totalTimeMax, workHours, createdAt, updatedAt 
+          FROM departmentScheduleConfig_backup
+        `);
+        
+        // Drop backup
+        await db.exec(`DROP TABLE departmentScheduleConfig_backup`);
+        
+        console.log('Migration completed successfully');
+      }
+    } catch (error: any) {
+      if (error.message && error.message.includes('already exists')) {
+        console.log('departmentScheduleConfig table migration already completed');
+      } else {
+        console.error('Error migrating departmentScheduleConfig table:', error);
+      }
+    }
+
+    // Add completionNotes column to tasks table if it doesn't exist
+    try {
+      await db.exec(`ALTER TABLE tasks ADD COLUMN completionNotes TEXT`);
+      console.log('Added completionNotes column to tasks table');
+    } catch (error: any) {
+      if (error.message && error.message.includes('duplicate column')) {
+        console.log('completionNotes column already exists');
+      } else {
+        console.error('Error adding completionNotes column:', error);
+      }
+    }
+
+    // Add completedAt column to tasks table if it doesn't exist
+    try {
+      await db.exec(`ALTER TABLE tasks ADD COLUMN completedAt TEXT`);
+      console.log('Added completedAt column to tasks table');
+    } catch (error: any) {
+      if (error.message && error.message.includes('duplicate column')) {
+        console.log('completedAt column already exists');
+      } else {
+        console.error('Error adding completedAt column:', error);
+      }
+    }
+
+    // Add recurringTaskId column to tasks table if it doesn't exist
+    try {
+      await db.exec(`ALTER TABLE tasks ADD COLUMN recurringTaskId TEXT`);
+      console.log('Added recurringTaskId column to tasks table');
+    } catch (error: any) {
+      if (error.message && error.message.includes('duplicate column')) {
+        console.log('recurringTaskId column already exists');
+      } else {
+        console.error('Error adding recurringTaskId column:', error);
+      }
+    }
+
+    // Add isRecurringInstance column to tasks table if it doesn't exist
+    try {
+      await db.exec(`ALTER TABLE tasks ADD COLUMN isRecurringInstance INTEGER DEFAULT 0`);
+      console.log('Added isRecurringInstance column to tasks table');
+    } catch (error: any) {
+      if (error.message && error.message.includes('duplicate column')) {
+        console.log('isRecurringInstance column already exists');
+      } else {
+        console.error('Error adding isRecurringInstance column:', error);
+      }
+    }
+
     console.log('Migrations completed successfully');
   } catch (error) {
     console.error('Error running migrations:', error);
@@ -254,7 +367,8 @@ async function createTables(db: Database): Promise<void> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS departmentScheduleConfig (
       id TEXT PRIMARY KEY,
-      departmentId TEXT NOT NULL UNIQUE,
+      departmentId TEXT NOT NULL,
+      positionId TEXT,
       entryTimeMin TEXT NOT NULL DEFAULT '06:30',
       entryTimeMax TEXT NOT NULL DEFAULT '07:30',
       exitTimeMin TEXT NOT NULL DEFAULT '15:30',
@@ -263,7 +377,9 @@ async function createTables(db: Database): Promise<void> {
       totalTimeMax TEXT NOT NULL DEFAULT '09:15',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
-      FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE CASCADE
+      UNIQUE(departmentId, positionId),
+      FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE CASCADE,
+      FOREIGN KEY (positionId) REFERENCES positions(id) ON DELETE CASCADE
     )
   `);
 
@@ -580,6 +696,22 @@ async function createTables(db: Database): Promise<void> {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (assignedTo) REFERENCES users(id),
+      FOREIGN KEY (createdBy) REFERENCES users(id)
+    )
+  `);
+
+  // Recurring Tasks table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS recurring_tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      priority TEXT DEFAULT 'medium',
+      dayOfWeek INTEGER NOT NULL,
+      isActive INTEGER DEFAULT 1,
+      createdBy TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
       FOREIGN KEY (createdBy) REFERENCES users(id)
     )
   `);

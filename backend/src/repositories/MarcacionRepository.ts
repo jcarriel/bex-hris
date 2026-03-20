@@ -64,7 +64,6 @@ export class MarcacionRepository {
       FROM marcacion m
       LEFT JOIN employees e ON 
         LOWER(TRIM(m.employeeName)) = LOWER(TRIM(e.lastName  || ' ' || e.firstName ))
-        AND e.status = 'active'
       ORDER BY m.date DESC, m.employeeName
     `);
   }

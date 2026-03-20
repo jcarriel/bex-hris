@@ -53,6 +53,8 @@ export default function MarcacionPage() {
   const [filterDepartamentoHorasExtras, setFilterDepartamentoHorasExtras] = useState('');
   
   const [uniqueDepartamentos, setUniqueDepartamentos] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [departmentMap, setDepartmentMap] = useState<Map<string, string>>(new Map());
   const [activeTab, setActiveTab] = useState<'marcacion' | 'inconsistencias' | 'horas_extras' | 'generar'>('marcacion');
   const [payrollData, setPayrollData] = useState<any[]>([]);
   const [loadingPayroll, setLoadingPayroll] = useState(false);
@@ -60,9 +62,10 @@ export default function MarcacionPage() {
   const [generatingExcel, setGeneratingExcel] = useState(false);
   const [scheduleConfigs, setScheduleConfigs] = useState<Map<string, any>>(new Map());
 
-  // Cargar períodos disponibles al montar el componente
+  // Cargar períodos disponibles y departamentos al montar el componente
   useEffect(() => {
     loadAvailablePeriods();
+    loadDepartments();
   }, []);
 
   // Cargar datos cuando se selecciona un período
@@ -103,6 +106,23 @@ export default function MarcacionPage() {
     } catch (error) {
       console.error('Error loading available periods:', error);
       setPeriodsLoaded(true);
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      const response = await api.client.get('/departments');
+      const deptList = response.data.data || [];
+      setDepartments(deptList);
+      
+      // Crear mapeo de ID a nombre
+      const map = new Map<string, string>();
+      deptList.forEach((dept: any) => {
+        map.set(dept.id, dept.name);
+      });
+      setDepartmentMap(map);
+    } catch (error) {
+      console.error('Error loading departments:', error);
     }
   };
 
@@ -402,15 +422,6 @@ export default function MarcacionPage() {
     return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
   };
 
-  const getRandomTargetMinutes = (totalTimeMin: string = '08:45', totalTimeMax: string = '09:15'): number => {
-    // Retorna un valor aleatorio entre los minutos configurados
-    const [minHours, minMins] = totalTimeMin.split(':').map(Number);
-    const [maxHours, maxMins] = totalTimeMax.split(':').map(Number);
-    const TARGET_MIN = minHours * 60 + minMins;
-    const TARGET_MAX = maxHours * 60 + maxMins;
-    return Math.floor(Math.random() * (TARGET_MAX - TARGET_MIN + 1)) + TARGET_MIN;
-  };
-
   const correctMarcacion = (
     firstCheckIn: string | null,
     lastCheckOut: string | null,
@@ -430,8 +441,8 @@ export default function MarcacionPage() {
     
     // totalTimeMin y totalTimeMax ahora son números (minutos de tolerancia)
     // Convertir a minutos de tolerancia alrededor de workHours
-    const toleranceMin = Number(scheduleConfig?.totalTimeMin) || 15; // minutos menos
-    const toleranceMax = Number(scheduleConfig?.totalTimeMax) || 15; // minutos más
+    const toleranceMin = Number(scheduleConfig?.totalTimeMin) || 10; // minutos menos
+    const toleranceMax = Number(scheduleConfig?.totalTimeMax) || 10; // minutos más
     
     // Calcular tiempos reales basados en workHours
     const TARGET_MIN = workMinutes - toleranceMin;
@@ -692,29 +703,46 @@ export default function MarcacionPage() {
       let finalExitTime = correction.correctedLast;
       let finalCorrectedTime = `${String(Math.floor(correctedTotalMinutes / 60)).padStart(2, '0')}:${String(correctedTotalMinutes % 60).padStart(2, '0')}`;
       let addedOvertimeDisplay = '-';
-      // Si el empleado tiene horas extras, distribuirlas aleatoriamente
+      // Si el empleado tiene horas extras, distribuirlas de forma que cada bloque sea >= 45 minutos
       if (payrollRecord && payrollRecord.overtimeHours50 > 0) {
         const employeeName = marcacion.employeeName.toLowerCase();
         const overtimeHours = payrollRecord.overtimeHours50;
         const overtimeMinutes = Math.round(overtimeHours * 60);
+        
         if (!employeeOvertimeMap.has(employeeName)) {
           // Obtener todos los registros del empleado
           const employeeMarcaciones = allMarcaciones.filter(m => 
             m.employeeName.toLowerCase() === employeeName
           );
           
-          // Distribuir horas extras uniformemente entre los registros
+          // Distribuir horas extras: solo asignar a algunos registros, cada uno >= 45 minutos
           const distribution = new Map<string, number>();
-          const baseMinutesPerRecord = Math.floor(overtimeMinutes / employeeMarcaciones.length);
-          let remainingMinutes = overtimeMinutes % employeeMarcaciones.length;
+          const minBlockSize = 45;
           
-          employeeMarcaciones.forEach((m, index) => {
-            let addedMinutes = baseMinutesPerRecord;
-            // Distribuir los minutos restantes en los últimos registros
-            if (index >= employeeMarcaciones.length - remainingMinutes) {
-              addedMinutes += 1;
+          // Calcular cuántos bloques de 45+ minutos podemos hacer
+          let numBlocksOf45 = Math.floor(overtimeMinutes / minBlockSize);
+          let remainingMinutes = overtimeMinutes % minBlockSize;
+          
+          // Distribuir los minutos entre los bloques
+          const minutesPerBlock: number[] = [];
+          
+          for (let i = 0; i < numBlocksOf45 && i < employeeMarcaciones.length; i++) {
+            if (i === numBlocksOf45 - 1) {
+              // Último bloque: asignar 45 + el resto (si existe)
+              minutesPerBlock.push(minBlockSize + remainingMinutes);
+            } else {
+              // Bloques anteriores: asignar 45 minutos
+              minutesPerBlock.push(minBlockSize);
             }
-            distribution.set(m.id, addedMinutes);
+          }
+          
+          // Asignar a cada marcación (solo a los primeros numBlocksOf45 registros)
+          employeeMarcaciones.forEach((m, index) => {
+            if (index < minutesPerBlock.length) {
+              distribution.set(m.id, minutesPerBlock[index]);
+            } else {
+              distribution.set(m.id, 0); // Sin horas extras
+            }
           });
           
           employeeOvertimeMap.set(employeeName, { remaining: 0, distribution });
@@ -747,21 +775,26 @@ export default function MarcacionPage() {
 
       const totalWithoutOvertime = `${String(Math.floor((timeToMinutes(correction.correctedLast) - timeToMinutes(correction.correctedFirst)) / 60)).padStart(2, '0')}:${String((timeToMinutes(correction.correctedLast) - timeToMinutes(correction.correctedFirst)) % 60).padStart(2, '0')}`;
       
+      // Calcular número de semana
+      const date = new Date(marcacion.date);
+      const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+      const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
+      const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+      
       excelData.push({
         'Id del Empleado': marcacion.cedula,
         'Nombres': marcacion.employeeName,
         'Departamento': marcacion.department,
-        'Mes': marcacion.month,
+        'Semana': weekNumber,
         'Fecha': new Date(marcacion.date).toLocaleDateString('es-ES'),
         'Asistencia Diaria': marcacion.dailyAttendance,
         'Primera Marcación (Original)': originalFirst || '-',
         'Última Marcación (Original)': originalLast || '-',
-        'Primera Marcación (Corregida)': correction.correctedFirst,
-        'Última Marcación (Corregida)': correction.correctedLast,
-        'Última Marcación (Horas Extras)': finalExitTime,
-        'Horas Extras Agregadas': addedOvertimeDisplay,
         'Tiempo Total (Original)': originalTime,
+        'Primera Marcación (Corregida)': correction.correctedFirst,
+        'Última Marcación (Corregida)': finalExitTime,
         'Tiempo Total (Corregido)': finalCorrectedTime,
+        'Horas Extras Agregadas': addedOvertimeDisplay,
       });
     });
 
@@ -832,7 +865,7 @@ export default function MarcacionPage() {
       // Obtener horas de trabajo configuradas (por defecto 9)
       const workHours = departmentConfig?.workHours ? Number(departmentConfig.workHours) : 9;
       const workMinutes = workHours * 60;
-      const toleranceMin = departmentConfig?.totalTimeMin ? Number(departmentConfig.totalTimeMin) : 15;
+      const toleranceMin = departmentConfig?.totalTimeMin ? Number(departmentConfig.totalTimeMin) : 10;
 
       // Inconsistencia 1: Sin marcación de salida o sin entrada (cuando entrada y salida son iguales)
       if (record.firstCheckIn && record.lastCheckOut && record.firstCheckIn === record.lastCheckOut) {
@@ -1636,7 +1669,7 @@ export default function MarcacionPage() {
                 columns={[
                   { title: 'Cédula', data: 'cedula' },
                   { title: 'Nombre', data: 'employeeName' },
-                  { title: 'Departamento', data: 'departmentId', render: (data: string) => data || '-' },
+                  { title: 'Departamento', data: 'departmentId', render: (data: string) => departmentMap.get(data) || data || '-' },
                   { title: 'Horas Extras (Nómina)', data: 'overtimeHours50', render: (data: number) => `${data.toFixed(2)} hrs` },
                   { title: 'Horas Totales (Marcación)', data: 'marcacionTotalFormatted' },
                   { title: 'Tiempo Excedente (Marcación)', data: 'excessFormatted' },

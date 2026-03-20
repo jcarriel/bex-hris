@@ -72,6 +72,14 @@ export class TaskRepository {
       updates.push('assignedTo = ?');
       values.push(taskData.assignedTo);
     }
+    if (taskData.completionNotes !== undefined) {
+      updates.push('completionNotes = ?');
+      values.push(taskData.completionNotes);
+    }
+    if (taskData.completedAt !== undefined) {
+      updates.push('completedAt = ?');
+      values.push(taskData.completedAt);
+    }
 
     updates.push('updatedAt = ?');
     values.push(now);
@@ -109,5 +117,55 @@ export class TaskRepository {
       [date]
     );
     return tasks || [];
+  }
+
+  async getTasksByDateRange(startDate: string, endDate: string): Promise<any[]> {
+    const tasks = await this.db.all(
+      `SELECT * FROM tasks WHERE DATE(dueDate) BETWEEN DATE(?) AND DATE(?) ORDER BY dueDate ASC`,
+      [startDate, endDate]
+    );
+    return tasks || [];
+  }
+
+  async getCompletedTasks(): Promise<any[]> {
+    const tasks = await this.db.all(
+      `SELECT * FROM tasks WHERE status = 'completed' ORDER BY updatedAt DESC`
+    );
+    return tasks || [];
+  }
+
+  async getPendingTasks(): Promise<any[]> {
+    const tasks = await this.db.all(
+      `SELECT * FROM tasks WHERE status = 'pending' ORDER BY dueDate ASC`
+    );
+    return tasks || [];
+  }
+
+  async getTasksWithCreatorInfo(): Promise<any[]> {
+    const tasks = await this.db.all(
+      `SELECT t.*, u.email as creatorEmail, u.username as creatorName 
+       FROM tasks t 
+       LEFT JOIN users u ON t.createdBy = u.id 
+       ORDER BY t.dueDate ASC`
+    );
+    return tasks || [];
+  }
+
+  async markAsCompleted(id: string, completionNotes?: string): Promise<any> {
+    const now = new Date().toISOString();
+    await this.db.run(
+      `UPDATE tasks SET status = 'completed', completionNotes = ?, completedAt = ?, updatedAt = ? WHERE id = ?`,
+      [completionNotes || null, now, now, id]
+    );
+    return this.getById(id);
+  }
+
+  async markAsPending(id: string): Promise<any> {
+    const now = new Date().toISOString();
+    await this.db.run(
+      `UPDATE tasks SET status = 'pending', updatedAt = ? WHERE id = ?`,
+      [now, id]
+    );
+    return this.getById(id);
   }
 }

@@ -8,8 +8,12 @@ import { authMiddleware } from '@middleware/auth';
 import AuthController from '@controllers/AuthController';
 import EmployeeController from '@controllers/EmployeeController';
 import ResourceController from '@controllers/ResourceController';
+import RecurringTaskController from '@controllers/RecurringTaskController';
 import SchedulerService from '@services/SchedulerService';
 import DailyControlService from '@services/DailyControlService';
+import TaskSchedulerService from '@services/TaskSchedulerService';
+import RecurringTaskService from '@services/RecurringTaskService';
+import RecurringTaskGeneratorService from '@services/RecurringTaskGeneratorService';
 import logger from '@utils/logger';
 import errorLogger from '@utils/errorLogger';
 
@@ -128,7 +132,7 @@ app.get('/api/attendance', authMiddleware, (req, res) => {
     return ResourceController.getAllAttendance(req, res);
   }
 });
-
+  
 // Marcación (Attendance Records) routes
 app.get('/api/marcacion/periods', authMiddleware, (req, res) => ResourceController.getMarcacionPeriods(req, res));
 app.get('/api/marcacion/period/data', authMiddleware, (req, res) => ResourceController.getMarcacionByPeriod(req, res));
@@ -167,11 +171,25 @@ app.delete('/api/document-categories/:id', authMiddleware, (req, res) => Resourc
 // Tasks routes
 app.post('/api/tasks', authMiddleware, (req, res) => ResourceController.createTask(req, res));
 app.get('/api/tasks', authMiddleware, (req, res) => ResourceController.getAllTasks(req, res));
+app.get('/api/tasks/stats', authMiddleware, (req, res) => ResourceController.getTaskStats(req, res));
+app.get('/api/tasks/today', authMiddleware, (req, res) => ResourceController.getTodayTasks(req, res));
+app.get('/api/tasks/upcoming', authMiddleware, (req, res) => ResourceController.getUpcomingTasks(req, res));
+app.get('/api/tasks/completed', authMiddleware, (req, res) => ResourceController.getCompletedTasks(req, res));
 app.get('/api/tasks/:id', authMiddleware, (req, res) => ResourceController.getTaskById(req, res));
 app.put('/api/tasks/:id', authMiddleware, (req, res) => ResourceController.updateTask(req, res));
 app.delete('/api/tasks/:id', authMiddleware, (req, res) => ResourceController.deleteTask(req, res));
+app.put('/api/tasks/:id/complete', authMiddleware, (req, res) => ResourceController.markTaskAsCompleted(req, res));
+app.put('/api/tasks/:id/pending', authMiddleware, (req, res) => ResourceController.markTaskAsPending(req, res));
 app.get('/api/tasks/status/:status', authMiddleware, (req, res) => ResourceController.getTasksByStatus(req, res));
 app.get('/api/tasks/date/:date', authMiddleware, (req, res) => ResourceController.getTasksByDueDate(req, res));
+
+// Recurring Tasks routes
+app.post('/api/recurring-tasks', authMiddleware, (req, res) => RecurringTaskController.create(req, res));
+app.get('/api/recurring-tasks', authMiddleware, (req, res) => RecurringTaskController.getAll(req, res));
+app.get('/api/recurring-tasks/:id', authMiddleware, (req, res) => RecurringTaskController.getById(req, res));
+app.put('/api/recurring-tasks/:id', authMiddleware, (req, res) => RecurringTaskController.update(req, res));
+app.delete('/api/recurring-tasks/:id', authMiddleware, (req, res) => RecurringTaskController.delete(req, res));
+app.post('/api/recurring-tasks/:id/toggle', authMiddleware, (req, res) => RecurringTaskController.toggleActive(req, res));
 
 // Notification Schedule routes
 app.post('/api/notification-schedules', authMiddleware, (req, res) => ResourceController.createNotificationSchedule(req, res));
@@ -231,6 +249,14 @@ async function startServer() {
     // Initialize daily controls
     await DailyControlService.initializeDailyControls();
     logger.info('Daily control service initialized');
+
+    // Initialize task scheduler
+    TaskSchedulerService.initialize();
+    logger.info('Task scheduler initialized');
+
+    // Initialize recurring task generator
+    RecurringTaskGeneratorService.initialize();
+    logger.info('Recurring task generator initialized');
 
     app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);

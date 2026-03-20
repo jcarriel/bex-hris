@@ -12,7 +12,7 @@ interface PayrollData {
   month: number;
   position?: string;
   workDays?: number;
-  baseSalary: number;
+  earnedSalary: number;
   reserveFunds: number;
   twelfthSalary: number;
   fourteenthSalary: number;
@@ -47,7 +47,7 @@ const generatePayrollPDFContent = (payroll: PayrollData, companyName: string = '
   
   // Filtrar ingresos con valor > 0
   const incomeItems = [
-    { label: 'Sueldo', value: payroll.baseSalary },
+    { label: 'Sueldo', value: payroll.earnedSalary },
     { label: 'Fondos Reserva', value: payroll.reserveFunds },
     { label: 'Décimo Tercero', value: payroll.twelfthSalary },
     { label: 'Décimo Cuarto', value: payroll.fourteenthSalary },

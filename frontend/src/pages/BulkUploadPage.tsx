@@ -173,22 +173,6 @@ export default function BulkUploadPage() {
           👥 Empleados
         </button>
         <button
-          onClick={() => setActiveTab('roles')}
-          style={{
-            padding: '10px 20px',
-            background: activeTab === 'roles' ? '#00A86B' : (theme === 'light' ? '#f5f7fa' : '#374151'),
-            color: activeTab === 'roles' ? 'white' : (theme === 'light' ? '#666' : '#9ca3af'),
-            border: 'none',
-            borderRadius: '5px 5px 0 0',
-            transition: 'background 0.2s',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: activeTab === 'roles' ? 'bold' : 'normal',
-          }}
-        >
-          💼 Roles por Mes
-        </button>
-        <button
           onClick={() => setActiveTab('payroll')}
           style={{
             padding: '10px 20px',

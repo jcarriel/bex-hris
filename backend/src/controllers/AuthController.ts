@@ -61,10 +61,11 @@ export class AuthController {
         data: result,
       });
     } catch (error) {
-      logger.error('Login error', error);
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      logger.error(`Login error: ${errorMessage}`);
       res.status(401).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Login failed',
+        message: errorMessage,
       });
     }
   }

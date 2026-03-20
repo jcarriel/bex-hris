@@ -43,10 +43,24 @@ export class AuthService {
         throw new Error('Invalid credentials');
       }
 
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+      // Try to compare with bcrypt first, then fallback to plain text comparison for legacy passwords
+      let isPasswordValid = false;
+      try {
+        isPasswordValid = await bcrypt.compare(password, user.password);
+      } catch (e) {
+        // If bcrypt fails, it might be a plain text password, compare directly
+        isPasswordValid = password === user.password;
+      }
 
       if (!isPasswordValid) {
         throw new Error('Invalid credentials');
+      }
+
+      // If password is plain text, hash it for security
+      if (password === user.password) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await UserRepository.update(user.id, { password: hashedPassword });
+        logger.info(`Password upgraded to bcrypt for user: ${username}`);
       }
 
       const token = jwt.sign(
@@ -72,7 +86,8 @@ export class AuthService {
         },
       };
     } catch (error) {
-      logger.error('Login error', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Login error for user ${username}: ${errorMessage}`);
       throw error;
     }
   }
@@ -85,7 +100,14 @@ export class AuthService {
         throw new Error('User not found');
       }
 
-      const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+      // Try to compare with bcrypt first, then fallback to plain text comparison for legacy passwords
+      let isPasswordValid = false;
+      try {
+        isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+      } catch (e) {
+        // If bcrypt fails, it might be a plain text password, compare directly
+        isPasswordValid = oldPassword === user.password;
+      }
 
       if (!isPasswordValid) {
         throw new Error('Invalid current password');
@@ -97,6 +119,24 @@ export class AuthService {
       logger.info(`Password changed for user: ${user.username}`);
     } catch (error) {
       logger.error('Change password error', error);
+      throw error;
+    }
+  }
+
+  async resetPassword(username: string, newPassword: string): Promise<void> {
+    try {
+      const user = await UserRepository.findByUsername(username);
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await UserRepository.update(user.id, { password: hashedPassword });
+
+      logger.info(`Password reset for user: ${username}`);
+    } catch (error) {
+      logger.error('Reset password error', error);
       throw error;
     }
   }

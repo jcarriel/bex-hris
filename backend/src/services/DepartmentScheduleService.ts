@@ -17,18 +17,18 @@ interface DepartmentScheduleConfig {
 }
 
 class DepartmentScheduleService {
-  // Crear o actualizar configuración de horario para un departamento
+  // Crear o actualizar configuración de horario para un departamento y cargo
   async createOrUpdate(departmentId: string, config: Omit<DepartmentScheduleConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<DepartmentScheduleConfig> {
     const db = getDatabase();
     const now = new Date().toISOString();
-    const existing = await this.getByDepartmentId(departmentId);
+    const existing = await this.getByDepartmentAndPosition(departmentId, config.positionId);
 
     if (existing) {
       await db.run(
         `UPDATE departmentScheduleConfig
          SET entryTimeMin = ?, entryTimeMax = ?, exitTimeMin = ?, exitTimeMax = ?,
-             totalTimeMin = ?, totalTimeMax = ?, positionId = ?, workHours = ?, updatedAt = ?
-         WHERE departmentId = ?`,
+             totalTimeMin = ?, totalTimeMax = ?, workHours = ?, updatedAt = ?
+         WHERE departmentId = ? AND (positionId = ? OR (positionId IS NULL AND ? IS NULL))`,
         [
           config.entryTimeMin,
           config.entryTimeMax,
@@ -36,13 +36,14 @@ class DepartmentScheduleService {
           config.exitTimeMax,
           config.totalTimeMin,
           config.totalTimeMax,
-          config.positionId || null,
           config.workHours || 9,
           now,
           departmentId,
+          config.positionId || null,
+          config.positionId || null,
         ]
       );
-      return (await this.getByDepartmentId(departmentId))!;
+      return (await this.getByDepartmentAndPosition(departmentId, config.positionId))!;
     } else {
       const id = uuidv4();
       await db.run(
@@ -80,6 +81,24 @@ class DepartmentScheduleService {
     const db = getDatabase();
     const result = await db.get('SELECT * FROM departmentScheduleConfig WHERE departmentId = ?', [departmentId]);
     return (result as DepartmentScheduleConfig) || null;
+  }
+
+  // Obtener configuración por departamento y cargo
+  async getByDepartmentAndPosition(departmentId: string, positionId?: string): Promise<DepartmentScheduleConfig | null> {
+    const db = getDatabase();
+    if (positionId) {
+      const result = await db.get(
+        'SELECT * FROM departmentScheduleConfig WHERE departmentId = ? AND positionId = ?',
+        [departmentId, positionId]
+      );
+      return (result as DepartmentScheduleConfig) || null;
+    } else {
+      const result = await db.get(
+        'SELECT * FROM departmentScheduleConfig WHERE departmentId = ? AND positionId IS NULL',
+        [departmentId]
+      );
+      return (result as DepartmentScheduleConfig) || null;
+    }
   }
 
   // Obtener todas las configuraciones

@@ -714,7 +714,6 @@ export default function EmployeesPage() {
               data: null,
               render: (data, type, row) => {
                 return `<div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                  <button class="action-btn docs-btn" data-id="${row.id}" data-action="docs">📄</button>
                   <button class="action-btn edit-btn" data-id="${row.id}" data-action="edit">✏️</button>
                   <button class="action-btn delete-btn" data-id="${row.id}" data-action="delete">🗑</button>
                 </div>`;

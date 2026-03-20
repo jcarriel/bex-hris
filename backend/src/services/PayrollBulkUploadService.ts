@@ -23,12 +23,14 @@ export class PayrollBulkUploadService {
     updatedCount: number;
     errors: Array<{ row: number; error: string }>;
     notFoundEmployees: Array<{ row: number; cedula: string; name: string }>;
+    consolidatedPayrolls: Array<{ name: string; cedula: string; year: number; month: number; previousValues: any; newValues: any; consolidatedValues: any }>;
     pendingPayrolls: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>>;
     data: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>>;
   }> {
     try {
       const errors: Array<{ row: number; error: string }> = [];
       const notFoundEmployees: Array<{ row: number; cedula: string; name: string }> = [];
+      const consolidatedPayrolls: Array<{ name: string; cedula: string; year: number; month: number; previousValues: any; newValues: any; consolidatedValues: any }> = [];
       const processedPayrolls: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>> = [];
       const pendingPayrolls: Array<Omit<Payroll, 'id' | 'createdAt' | 'updatedAt'>> = [];
       let createdCount = 0;
@@ -39,10 +41,11 @@ export class PayrollBulkUploadService {
       // Leer archivo XLSX
       const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
       
-      // Buscar la hoja "BASE", si no existe usar la primera hoja
+      // Buscar la hoja "BASE" (mayúscula o minúscula), si no existe usar la primera hoja
       let sheetName = workbook.SheetNames[0];
-      if (workbook.SheetNames.includes('BASE')) {
-        sheetName = 'BASE';
+      const baseSheet = workbook.SheetNames.find(name => name.toUpperCase() === 'BASE');
+      if (baseSheet) {
+        sheetName = baseSheet;
       }
       
       logger.info(`Reading sheet: ${sheetName}`);
@@ -192,8 +195,6 @@ export class PayrollBulkUploadService {
         }
       }
       
-      logger.info(`Column indices - ALIMENTACION Ingresos: ${alimentacionIngresosIndex}, Egresos: ${alimentacionEgresosIndex}, IESS Loan: ${iessLoanIndex}, Company Loan: ${companyLoanIndex}, Spouse Ext: ${spouseExtensionIndex}, Non Work Days: ${nonWorkDaysIndex}, Other Deductions: ${otherDeductionsIndex}, Other Income: ${otherIncomeIndex}, Medical Leave: ${medicalLeaveIndex}, Vacation: ${vacationIndex}, Reserve Funds: ${reserveFundsIndex}`);
-
       // Procesar cada fila
       for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
         try {
@@ -239,8 +240,6 @@ export class PayrollBulkUploadService {
             const normalizedKey = (key as string).replace(/\s+/g, '').toUpperCase();
             normalizedCurrentRow[normalizedKey] = value;
           }
-
-          logger.info(`Row ${rowIndex + 1} normalized keys: ${JSON.stringify(Object.keys(normalizedCurrentRow).slice(0, 15))}`);
 
           // Usar mapeo normalizado
           const mappingToUse = normalizedColumnMapping;
@@ -328,22 +327,35 @@ export class PayrollBulkUploadService {
             continue;
           }
 
-          // Buscar empleado por cédula para obtener el employeeId
+          // Buscar departamento por nombre para obtener el departmentId
+          try {
+            const DepartmentService = (await import('@services/DepartmentService')).default;
+            const departments = await DepartmentService.getAllDepartments();
+            const department = departments.find((d: any) => d.name.toUpperCase() === payrollData.departmentId.toUpperCase());
+            
+            if (!department) {
+              logger.warn(`Department "${payrollData.departmentId}" not found, using employee's department`);
+              // Se usará el departamento del empleado en su lugar
+            } else {
+              payrollData.departmentId = department.id;
+              logger.info(`Mapped department name "${payrollData.departmentId}" to ID: ${department.id}`);
+            }
+          } catch (deptError) {
+            logger.error(`Error finding department:`, deptError);
+          }
+
+          // Buscar empleado por nombre (employeeName) para obtener el employeeId
           try {
             const EmployeeRepository = (await import('@repositories/EmployeeRepository')).default;
             
-            // Normalizar cédula: si tiene 9 dígitos, agregar 0 al inicio
-            let normalizedCedula = payrollData.cedula;
-            const cedulaDigits = payrollData.cedula.replace(/\D/g, '');
-            if (cedulaDigits.length === 9) {
-              normalizedCedula = '0' + cedulaDigits;
-            } else if (cedulaDigits.length === 10) {
-              normalizedCedula = cedulaDigits;
-            }
+            // Buscar empleado por nombre (case-insensitive)
+            const employees = await EmployeeRepository.getAll();
+            const employee = employees.find((emp: any) => 
+              emp.firstName && emp.lastName &&
+              `${emp.lastName} ${emp.firstName}`.toUpperCase() === payrollData.employeeName.toUpperCase()
+            );
             
-            const employee = await EmployeeRepository.findByCedula(normalizedCedula);
-            
-            logger.info(`Looking for employee with cedula: ${normalizedCedula}, found: ${employee ? 'YES' : 'NO'}`);
+            logger.info(`Looking for employee with name: ${payrollData.employeeName}, found: ${employee ? 'YES' : 'NO'}`);
             
             if (!employee) {
               notFoundEmployees.push({
@@ -353,18 +365,23 @@ export class PayrollBulkUploadService {
               });
               // Guardar la nómina como pendiente para procesarla después de crear el empleado
               pendingPayrolls.push(payrollData);
-              logger.info(`Payroll for employee ${payrollData.cedula} saved as pending - will be processed after employee registration`);
+              logger.info(`Payroll for employee ${payrollData.employeeName} saved as pending - will be processed after employee registration`);
               continue;
             }
             
             // Asignar el employeeId del empleado encontrado
             payrollData.employeeId = employee.id;
-            logger.info(`Assigned employeeId: ${employee.id} for cedula: ${payrollData.cedula}`);
+            // Si no se encontró el departamento, usar el del empleado
+            if (!payrollData.departmentId || payrollData.departmentId.length < 20) {
+              payrollData.departmentId = employee.departmentId;
+              logger.info(`Using employee's department: ${employee.departmentId}`);
+            }
+            logger.info(`Assigned employeeId: ${employee.id} for name: ${payrollData.employeeName}`);
           } catch (employeeError) {
-            logger.error(`Error finding employee by cedula ${payrollData.cedula}:`, employeeError);
+            logger.error(`Error finding employee by name ${payrollData.employeeName}:`, employeeError);
             errors.push({
               row: rowIndex + 1,
-              error: `Error buscando empleado con cédula: ${payrollData.cedula}`,
+              error: `Error buscando empleado con nombre: ${payrollData.employeeName}`,
             });
             continue;
           }
@@ -377,37 +394,114 @@ export class PayrollBulkUploadService {
           );
 
           try {
-            // SIEMPRE eliminar primero para evitar conflictos de restricción UNIQUE
             const db = (await import('@config/database')).getDatabase();
-            try {
-              const deleteResult = await db.run(
-                'DELETE FROM payroll WHERE employeeId = ? AND year = ? AND month = ?',
-                [payrollData.employeeId, payrollData.year, payrollData.month]
-              );
-              const wasUpdated = (deleteResult.changes || 0) > 0;
-              if (wasUpdated) {
-                logger.info(`Deleted existing payroll for ${payrollData.cedula} - ${payrollData.year}/${payrollData.month}`);
-              }
-            } catch (deleteError) {
-              logger.error(`Error deleting payroll at row ${rowIndex + 1}:`, deleteError);
-              throw deleteError;
-            }
             
-            // Crear nueva nómina
-            try {
-              const newPayroll = await PayrollRepository.create(payrollData);
-              createdCount++;
-              logger.info(`Payroll created: ${payrollData.cedula} - ${payrollData.year}/${payrollData.month}`);
-              processedPayrolls.push(payrollData);
-            } catch (createError) {
-              logger.error(`Error creating payroll at row ${rowIndex + 1}:`, createError);
-              logger.error(`CREATE SQL Error Details:`, {
-                message: createError instanceof Error ? createError.message : 'Unknown',
-                code: (createError as any)?.code,
-                errno: (createError as any)?.errno,
-                sql: (createError as any)?.sql,
-              });
-              throw createError;
+            if (existingPayroll) {
+              // Si existe un registro previo, consolidar sumando los valores
+              logger.info(`Found existing payroll for ${payrollData.employeeName} - ${payrollData.year}/${payrollData.month}, consolidating...`);
+              
+              // Guardar valores previos para el reporte
+              const previousValues = {
+                baseSalary: existingPayroll.baseSalary,
+                workDays: existingPayroll.workDays,
+                overtimeHours50: existingPayroll.overtimeHours50,
+                earnedSalary: existingPayroll.earnedSalary,
+                totalIncome: existingPayroll.totalIncome,
+                totalDeductions: existingPayroll.totalDeductions,
+                totalToPay: existingPayroll.totalToPay,
+              };
+              
+              // Sumar valores numéricos
+              const consolidatedPayrollData = {
+                ...payrollData,
+                baseSalary: (existingPayroll.baseSalary || 0) + (payrollData.baseSalary || 0),
+                workDays: (existingPayroll.workDays || 0) + (payrollData.workDays || 0),
+                overtimeHours50: (existingPayroll.overtimeHours50 || 0) + (payrollData.overtimeHours50 || 0),
+                earnedSalary: (existingPayroll.earnedSalary || 0) + (payrollData.earnedSalary || 0),
+                responsibilityBonus: (existingPayroll.responsibilityBonus || 0) + (payrollData.responsibilityBonus || 0),
+                productivityBonus: (existingPayroll.productivityBonus || 0) + (payrollData.productivityBonus || 0),
+                foodAllowance: (existingPayroll.foodAllowance || 0) + (payrollData.foodAllowance || 0),
+                overtimeValue50: (existingPayroll.overtimeValue50 || 0) + (payrollData.overtimeValue50 || 0),
+                otherIncome: (existingPayroll.otherIncome || 0) + (payrollData.otherIncome || 0),
+                medicalLeave: (existingPayroll.medicalLeave || 0) + (payrollData.medicalLeave || 0),
+                twelfthSalary: (existingPayroll.twelfthSalary || 0) + (payrollData.twelfthSalary || 0),
+                fourteenthSalary: (existingPayroll.fourteenthSalary || 0) + (payrollData.fourteenthSalary || 0),
+                totalIncome: (existingPayroll.totalIncome || 0) + (payrollData.totalIncome || 0),
+                vacation: (existingPayroll.vacation || 0) + (payrollData.vacation || 0),
+                reserveFunds: (existingPayroll.reserveFunds || 0) + (payrollData.reserveFunds || 0),
+                totalBenefits: (existingPayroll.totalBenefits || 0) + (payrollData.totalBenefits || 0),
+                iessContribution: (existingPayroll.iessContribution || 0) + (payrollData.iessContribution || 0),
+                advance: (existingPayroll.advance || 0) + (payrollData.advance || 0),
+                nonWorkDays: (existingPayroll.nonWorkDays || 0) + (payrollData.nonWorkDays || 0),
+                incomeTax: (existingPayroll.incomeTax || 0) + (payrollData.incomeTax || 0),
+                iessLoan: (existingPayroll.iessLoan || 0) + (payrollData.iessLoan || 0),
+                companyLoan: (existingPayroll.companyLoan || 0) + (payrollData.companyLoan || 0),
+                spouseExtension: (existingPayroll.spouseExtension || 0) + (payrollData.spouseExtension || 0),
+                foodDeduction: (existingPayroll.foodDeduction || 0) + (payrollData.foodDeduction || 0),
+                otherDeductions: (existingPayroll.otherDeductions || 0) + (payrollData.otherDeductions || 0),
+                totalDeductions: (existingPayroll.totalDeductions || 0) + (payrollData.totalDeductions || 0),
+                totalToPay: (existingPayroll.totalToPay || 0) + (payrollData.totalToPay || 0),
+              };
+              
+              // Eliminar el registro anterior
+              try {
+                await db.run(
+                  'DELETE FROM payroll WHERE employeeId = ? AND year = ? AND month = ?',
+                  [payrollData.employeeId, payrollData.year, payrollData.month]
+                );
+              } catch (deleteError) {
+                logger.error(`Error deleting existing payroll at row ${rowIndex + 1}:`, deleteError);
+                throw deleteError;
+              }
+              
+              // Crear la nómina consolidada
+              try {
+                const newPayroll = await PayrollRepository.create(consolidatedPayrollData);
+                updatedCount++;
+                logger.info(`Payroll consolidated for ${payrollData.employeeName} - ${payrollData.year}/${payrollData.month}`);
+                processedPayrolls.push(consolidatedPayrollData);
+                
+                // Registrar la consolidación
+                consolidatedPayrolls.push({
+                  name: payrollData.employeeName,
+                  cedula: payrollData.cedula,
+                  year: payrollData.year,
+                  month: payrollData.month,
+                  previousValues,
+                  newValues: {
+                    baseSalary: payrollData.baseSalary,
+                    workDays: payrollData.workDays,
+                    overtimeHours50: payrollData.overtimeHours50,
+                    earnedSalary: payrollData.earnedSalary,
+                    totalIncome: payrollData.totalIncome,
+                    totalDeductions: payrollData.totalDeductions,
+                    totalToPay: payrollData.totalToPay,
+                  },
+                  consolidatedValues: {
+                    baseSalary: consolidatedPayrollData.baseSalary,
+                    workDays: consolidatedPayrollData.workDays,
+                    overtimeHours50: consolidatedPayrollData.overtimeHours50,
+                    earnedSalary: consolidatedPayrollData.earnedSalary,
+                    totalIncome: consolidatedPayrollData.totalIncome,
+                    totalDeductions: consolidatedPayrollData.totalDeductions,
+                    totalToPay: consolidatedPayrollData.totalToPay,
+                  },
+                });
+              } catch (createError) {
+                logger.error(`Error creating consolidated payroll at row ${rowIndex + 1}:`, createError);
+                throw createError;
+              }
+            } else {
+              // Si no existe registro previo, crear normalmente
+              try {
+                const newPayroll = await PayrollRepository.create(payrollData);
+                createdCount++;
+                logger.info(`Payroll created: ${payrollData.cedula} - ${payrollData.year}/${payrollData.month}`);
+                processedPayrolls.push(payrollData);
+              } catch (createError) {
+                logger.error(`Error creating payroll at row ${rowIndex + 1}:`, createError);
+                throw createError;
+              }
             }
           } catch (createError) {
             logger.error(`Error processing payroll at row ${rowIndex + 1}:`, { payrollData, error: createError });
@@ -431,6 +525,7 @@ export class PayrollBulkUploadService {
         updatedCount,
         errors,
         notFoundEmployees,
+        consolidatedPayrolls,
         pendingPayrolls,
         data: processedPayrolls,
       };

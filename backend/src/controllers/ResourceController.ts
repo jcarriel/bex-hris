@@ -249,7 +249,7 @@ export class ResourceController {
       
       // Sumar todos los baseSalary de las nóminas
       const totalPayroll = payrolls.reduce((sum: number, payroll: any) => {
-        return sum + (payroll.baseSalary || 0);
+        return sum + (payroll.earnedSalary || 0);
       }, 0);
       
       res.status(200).json({ success: true, data: totalPayroll });
@@ -566,7 +566,7 @@ export class ResourceController {
       const { id } = req.params;
       const taskData = req.body;
 
-      const task = await TaskService.updateTask(id, taskData);
+      const task = await TaskService.updateTask(id, taskData, req.user?.id);
 
       if (!task) {
         res.status(404).json({ success: false, message: 'Task not found' });
@@ -583,7 +583,7 @@ export class ResourceController {
   async deleteTask(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const deleted = await TaskService.deleteTask(id);
+      const deleted = await TaskService.deleteTask(id, req.user?.id);
 
       if (!deleted) {
         res.status(404).json({ success: false, message: 'Task not found' });
@@ -615,6 +615,68 @@ export class ResourceController {
       res.status(200).json({ success: true, data: tasks });
     } catch (error) {
       logger.error('Get tasks by due date error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getTodayTasks(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const tasks = await TaskService.getTodayTasks();
+      res.status(200).json({ success: true, data: tasks });
+    } catch (error) {
+      logger.error('Get today tasks error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getUpcomingTasks(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const tasks = await TaskService.getUpcomingTasks();
+      res.status(200).json({ success: true, data: tasks });
+    } catch (error) {
+      logger.error('Get upcoming tasks error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getCompletedTasks(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const tasks = await TaskService.getCompletedTasks();
+      res.status(200).json({ success: true, data: tasks });
+    } catch (error) {
+      logger.error('Get completed tasks error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getTaskStats(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const stats = await TaskService.getTaskStats();
+      res.status(200).json({ success: true, data: stats });
+    } catch (error) {
+      logger.error('Get task stats error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async markTaskAsCompleted(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const task = await TaskService.markTaskAsCompleted(id, undefined, req.user?.id);
+      res.status(200).json({ success: true, data: task });
+    } catch (error) {
+      logger.error('Mark task as completed error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async markTaskAsPending(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const task = await TaskService.markTaskAsPending(id, req.user?.id);
+      res.status(200).json({ success: true, data: task });
+    } catch (error) {
+      logger.error('Mark task as pending error', error);
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
     }
   }

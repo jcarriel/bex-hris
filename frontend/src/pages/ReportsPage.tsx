@@ -61,7 +61,7 @@ export default function ReportsPage() {
     if (reportType === 'payroll') {
       csv = 'Empleado,Salario Base,Bonificaciones,Deducciones,Impuestos,Neto\n';
       data.forEach((item: any) => {
-        csv += `${item.employeeId},${item.baseSalary},${item.bonuses},${item.deductions},${item.taxes},${item.netSalary}\n`;
+        csv += `${item.employeeId},${item.earnedSalary},${item.bonuses},${item.deductions},${item.taxes},${item.netSalary}\n`;
       });
     } else if (reportType === 'attendance') {
       csv = 'Empleado,Fecha,Entrada,Salida,Estado\n';
@@ -71,7 +71,7 @@ export default function ReportsPage() {
     } else if (reportType === 'employees') {
       csv = 'Nombre,Email,Cédula,Salario,Estado\n';
       data.forEach((item: any) => {
-        csv += `${item.firstName} ${item.lastName},${item.email},${item.cedula},${item.baseSalary},${item.status}\n`;
+        csv += `${item.firstName} ${item.lastName},${item.email},${item.cedula},${item.earnedSalary},${item.status}\n`;
       });
     }
 
@@ -320,7 +320,7 @@ export default function ReportsPage() {
                     {reportType === 'payroll' && (
                       <>
                         <td style={{ padding: '12px' }}>{item.employeeId}</td>
-                        <td style={{ padding: '12px' }}>${item.baseSalary?.toLocaleString()}</td>
+                        <td style={{ padding: '12px' }}>${item.earnedSalary?.toLocaleString()}</td>
                         <td style={{ padding: '12px' }}>${item.bonuses?.toLocaleString()}</td>
                         <td style={{ padding: '12px' }}>${item.deductions?.toLocaleString()}</td>
                         <td style={{ padding: '12px' }}>${item.taxes?.toLocaleString()}</td>
@@ -351,7 +351,7 @@ export default function ReportsPage() {
                         <td style={{ padding: '12px' }}>{item.firstName} {item.lastName}</td>
                         <td style={{ padding: '12px' }}>{item.email}</td>
                         <td style={{ padding: '12px' }}>{item.cedula}</td>
-                        <td style={{ padding: '12px' }}>${item.baseSalary?.toLocaleString()}</td>
+                        <td style={{ padding: '12px' }}>${item.earnedSalary?.toLocaleString()}</td>
                         <td style={{ padding: '12px' }}>{item.status}</td>
                       </>
                     )}

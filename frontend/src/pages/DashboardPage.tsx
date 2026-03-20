@@ -13,6 +13,8 @@ import DocumentsPage from './DocumentsPage';
 import SettingsPage from './SettingsPage';
 import DocumentGeneratorPage from './DocumentGeneratorPage';
 import BulkUploadPage from './BulkUploadPage';
+import TasksPage from './TasksPage';
+import RecurringTasksPage from './RecurringTasksPage';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -37,6 +39,10 @@ export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<string[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [notificationSchedules, setNotificationSchedules] = useState<any[]>([]);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [showTaskDetail, setShowTaskDetail] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionNotes, setCompletionNotes] = useState('');
 
   // Guardar el tab activo en localStorage cuando cambia
   useEffect(() => {
@@ -100,27 +106,41 @@ export default function DashboardPage() {
 
       const pendingLeaves = Array.isArray(leaves) ? leaves.filter((l: any) => l.status === 'pending').length : 0;
 
-      // Filtrar tareas activas (creadas antes o hoy, y no completadas)
-      const todayTasks = Array.isArray(allTasks) ? allTasks.filter((t: any) => {
+      // Filtrar tareas por categoría
+      const taskToday = new Date();
+      taskToday.setHours(0, 0, 0, 0);
+      
+      const overdueTasks = Array.isArray(allTasks) ? allTasks.filter((t: any) => {
         try {
-          const taskCreatedDate = new Date(t.createdAt);
           const taskDueDate = new Date(t.dueDate);
-          const today = new Date();
-          
-          // Mostrar tareas que:
-          // 1. Fueron creadas en o antes de hoy
-          // 2. Vencen en o después de hoy
-          // 3. No están completadas
-          const createdBeforeOrToday = taskCreatedDate <= today;
-          const dueAfterOrToday = taskDueDate >= today;
-          const notCompleted = t.status !== 'completed';
-          
-          return createdBeforeOrToday && dueAfterOrToday && notCompleted;
+          taskDueDate.setHours(0, 0, 0, 0);
+          return taskDueDate < taskToday && t.status !== 'completed';
         } catch (e) {
-          console.error('Error filtering task:', t, e);
           return false;
         }
       }) : [];
+      
+      const todayTasksList = Array.isArray(allTasks) ? allTasks.filter((t: any) => {
+        try {
+          const taskDueDate = new Date(t.dueDate);
+          taskDueDate.setHours(0, 0, 0, 0);
+          return taskDueDate.getTime() === taskToday.getTime() && t.status !== 'completed';
+        } catch (e) {
+          return false;
+        }
+      }) : [];
+      
+      const upcomingTasks = Array.isArray(allTasks) ? allTasks.filter((t: any) => {
+        try {
+          const taskDueDate = new Date(t.dueDate);
+          taskDueDate.setHours(0, 0, 0, 0);
+          return taskDueDate > taskToday && t.status !== 'completed';
+        } catch (e) {
+          return false;
+        }
+      }) : [];
+      
+      const allPendingTasks = [...overdueTasks, ...todayTasksList, ...upcomingTasks];
 
       setStats([
         { title: 'Empleados Activos', value: activeEmployees.toString(), color: '#00A86B' },
@@ -129,7 +149,7 @@ export default function DashboardPage() {
         { title: 'Asistencia Hoy', value: `${todayAttendance}/${activeEmployees}`, color: '#00A86B' },
       ]);
 
-      setTasks(todayTasks);
+      setTasks(allPendingTasks);
       setNotificationSchedules(notifications.filter((n: any) => n.enabled));
 
       // Actividades recientes
@@ -137,7 +157,7 @@ export default function DashboardPage() {
         `✓ ${activeEmployees} empleados registrados en el sistema`,
         `✓ ${todayAttendance} empleados presentes hoy`,
         `✓ ${pendingLeaves} licencias pendientes de aprobación`,
-        `✓ ${todayTasks.length} tareas para hoy`,
+        `✓ ${allPendingTasks.length} tareas pendientes`,
       ]);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -159,6 +179,29 @@ export default function DashboardPage() {
     }
   };
 
+  const handleShowTaskDetail = (task: any) => {
+    setSelectedTask(task);
+    setShowTaskDetail(true);
+  };
+
+  const handleCompleteTaskWithNotes = async () => {
+    if (!selectedTask) return;
+
+    try {
+      await api.client.put(`/tasks/${selectedTask.id}`, {
+        status: 'completed',
+        completionNotes: completionNotes,
+      });
+
+      setShowCompletionModal(false);
+      setCompletionNotes('');
+      setShowTaskDetail(false);
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error completing task:', error);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -166,6 +209,7 @@ export default function DashboardPage() {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'tasks', label: 'Tareas', icon: '📋' },
     { id: 'employees', label: 'Empleados', icon: '👥' },
     { id: 'payroll', label: 'Nómina', icon: '💰' },
     { id: 'marcacion', label: 'Marcación', icon: '⏱️' },
@@ -332,69 +376,165 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Tareas Pendientes */}
+              {/* Tareas Pendientes - Mejorado con secciones */}
               <div style={{
-                background: theme === 'light' ? 'white' : '#1f2937',
-                padding: '20px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                background: 'linear-gradient(135deg, #00A86B 0%, #008C5A 100%)',
+                padding: '30px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
                 marginTop: '20px',
-                border: `1px solid ${theme === 'light' ? '#eee' : '#374151'}`,
+                color: 'white',
               }}>
-                <h3 style={{ color: theme === 'light' ? '#333' : '#e5e7eb', marginTop: 0 }}>📋 Tareas Pendientes de Hoy</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', fontWeight: '700' }}>📋 Tareas Pendientes</h3>
+                    <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>Gestiona tus tareas pendientes</p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('tasks')}
+                    style={{
+                      padding: '10px 20px',
+                      background: 'rgba(255,255,255,0.2)',
+                      color: 'white',
+                      border: '2px solid white',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+                    }}
+                  >
+                    Ver todas →
+                  </button>
+                </div>
+
                 {tasks.length === 0 ? (
-                  <div style={{ color: theme === 'light' ? '#999' : '#9ca3af', fontSize: '14px', padding: '20px', textAlign: 'center' }}>
-                    ✓ No hay tareas pendientes para hoy
+                  <div style={{
+                    padding: '40px 20px',
+                    textAlign: 'center',
+                    background: 'rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    border: '2px dashed rgba(255,255,255,0.3)',
+                  }}>
+                    <div style={{ fontSize: '32px', marginBottom: '10px' }}>✨</div>
+                    <p style={{ margin: 0, fontSize: '15px', fontWeight: '500' }}>¡Excelente! No hay tareas pendientes</p>
+                    <p style={{ margin: '5px 0 0 0', fontSize: '13px', opacity: 0.8 }}>Crea una nueva tarea en el módulo de Tareas</p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {tasks.map((task: any) => {
-                      const isCompleted = task.status === 'completed';
-                      return (
-                      <div
-                        key={task.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '12px',
-                          background: isCompleted ? (theme === 'light' ? '#f0f0f0' : '#374151') : (theme === 'light' ? '#fafafa' : '#374151'),
-                          borderRadius: '6px',
-                          borderLeft: `4px solid ${isCompleted ? '#28a745' : '#0050b3'}`,
-                          cursor: 'pointer',
-                          transition: 'all 0.3s',
-                        }}
-                        onClick={() => toggleTaskCompletion(task.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isCompleted}
-                          onChange={() => toggleTaskCompletion(task.id)}
-                          style={{
-                            marginRight: '10px',
-                            cursor: 'pointer',
-                            width: '18px',
-                            height: '18px',
-                          }}
-                        />
-                        <span style={{
-                          flex: 1,
-                          textDecoration: isCompleted ? 'line-through' : 'none',
-                          color: isCompleted ? (theme === 'light' ? '#999' : '#9ca3af') : (theme === 'light' ? '#333' : '#e5e7eb'),
-                        }}>
-                          {task.title || task.name}
-                        </span>
-                        {task.description && (
-                          <div style={{
-                            fontSize: '12px',
-                            color: theme === 'light' ? '#999' : '#9ca3af',
-                            marginTop: '4px',
-                          }}>
-                            {task.description}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* Tareas Vencidas */}
+                    {(() => {
+                      const taskToday = new Date();
+                      taskToday.setHours(0, 0, 0, 0);
+                      const overdue = tasks.filter((t: any) => {
+                        const dueDate = new Date(t.dueDate);
+                        dueDate.setHours(0, 0, 0, 0);
+                        return dueDate < taskToday;
+                      });
+                      return overdue.length > 0 ? (
+                        <div>
+                          <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '700', opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>🔴 Tareas Vencidas ({overdue.length})</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {overdue.slice(0, 3).map((task: any) => (
+                              <div key={task.id} style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                padding: '12px 14px',
+                                background: 'rgba(255,0,0,0.15)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                border: '1px solid rgba(255,0,0,0.3)',
+                              }} onClick={() => handleShowTaskDetail(task)}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '3px' }}>{task.title}</div>
+                                  <div style={{ fontSize: '11px', opacity: 0.8 }}>👤 {task.creatorName || task.creatorEmail || 'Sistema'}</div>
+                                </div>
+                                <span style={{ padding: '3px 8px', borderRadius: '3px', fontSize: '10px', fontWeight: '600', background: 'rgba(255,0,0,0.3)', whiteSpace: 'nowrap', marginLeft: '8px' }}>{task.priority === 'high' ? '🔴 Alta' : task.priority === 'medium' ? '🟡 Media' : '🟢 Baja'}</span>
+                              </div>
+                            ))}
                           </div>
-                        )}
-                      </div>
-                    );
-                    })}
+                        </div>
+                      ) : null;
+                    })()}
+
+                    {/* Tareas de Hoy */}
+                    {(() => {
+                      const taskToday = new Date();
+                      taskToday.setHours(0, 0, 0, 0);
+                      const today = tasks.filter((t: any) => {
+                        const dueDate = new Date(t.dueDate);
+                        dueDate.setHours(0, 0, 0, 0);
+                        return dueDate.getTime() === taskToday.getTime();
+                      });
+                      return today.length > 0 ? (
+                        <div>
+                          <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '700', opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>📅 Hoy ({today.length})</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {today.slice(0, 3).map((task: any) => (
+                              <div key={task.id} style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                padding: '12px 14px',
+                                background: 'rgba(255,255,255,0.15)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                              }} onClick={() => handleShowTaskDetail(task)}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '3px' }}>{task.title}</div>
+                                  <div style={{ fontSize: '11px', opacity: 0.8 }}>👤 {task.creatorName || task.creatorEmail || 'Sistema'}</div>
+                                </div>
+                                <span style={{ padding: '3px 8px', borderRadius: '3px', fontSize: '10px', fontWeight: '600', background: task.priority === 'high' ? 'rgba(255,0,0,0.3)' : task.priority === 'medium' ? 'rgba(255,165,0,0.3)' : 'rgba(0,255,0,0.3)', whiteSpace: 'nowrap', marginLeft: '8px' }}>{task.priority === 'high' ? '🔴 Alta' : task.priority === 'medium' ? '🟡 Media' : '🟢 Baja'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+
+                    {/* Tareas Próximas */}
+                    {(() => {
+                      const taskToday = new Date();
+                      taskToday.setHours(0, 0, 0, 0);
+                      const upcoming = tasks.filter((t: any) => {
+                        const dueDate = new Date(t.dueDate);
+                        dueDate.setHours(0, 0, 0, 0);
+                        return dueDate > taskToday;
+                      });
+                      return upcoming.length > 0 ? (
+                        <div>
+                          <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '700', opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>⏰ Próximas ({upcoming.length})</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {upcoming.slice(0, 3).map((task: any) => (
+                              <div key={task.id} style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                padding: '12px 14px',
+                                background: 'rgba(255,255,255,0.1)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                              }} onClick={() => handleShowTaskDetail(task)}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '3px' }}>{task.title}</div>
+                                  <div style={{ fontSize: '11px', opacity: 0.8 }}>👤 {task.creatorName || task.creatorEmail || 'Sistema'} • 📅 {new Date(task.dueDate).toLocaleDateString('es-ES')}</div>
+                                </div>
+                                <span style={{ padding: '3px 8px', borderRadius: '3px', fontSize: '10px', fontWeight: '600', background: task.priority === 'high' ? 'rgba(255,0,0,0.3)' : task.priority === 'medium' ? 'rgba(255,165,0,0.3)' : 'rgba(0,255,0,0.3)', whiteSpace: 'nowrap', marginLeft: '8px' }}>{task.priority === 'high' ? '🔴 Alta' : task.priority === 'medium' ? '🟡 Media' : '🟢 Baja'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 )}
               </div>
@@ -460,6 +600,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {activeTab === 'tasks' && <TasksPage />}
           {activeTab === 'employees' && <EmployeesPage />}
           {activeTab === 'payroll' && <PayrollPage />}
           {activeTab === 'bulkUpload' && <BulkUploadPage />}
@@ -470,6 +611,291 @@ export default function DashboardPage() {
           {activeTab === 'leaves' && <LeavesPage />}
           {activeTab === 'reports' && <ReportsPage />}
           {activeTab === 'settings' && <SettingsPage />}
+
+          {/* Modal de Detalle de Tarea */}
+          {showTaskDetail && selectedTask && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }} onClick={() => setShowTaskDetail(false)}>
+              <div style={{
+                background: theme === 'light' ? 'white' : '#1f2937',
+                borderRadius: '12px',
+                padding: '30px',
+                maxWidth: '500px',
+                width: '90%',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+              }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                  <h2 style={{ margin: 0, color: theme === 'light' ? '#1f2937' : '#f3f4f6', fontSize: '22px' }}>
+                    {selectedTask.title}
+                  </h2>
+                  <button
+                    onClick={() => setShowTaskDetail(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '24px',
+                      cursor: 'pointer',
+                      color: theme === 'light' ? '#666' : '#9ca3af',
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                  <span style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    background: selectedTask.priority === 'high' ? '#fee2e2' : selectedTask.priority === 'medium' ? '#fef3c7' : '#dbeafe',
+                    color: selectedTask.priority === 'high' ? '#991b1b' : selectedTask.priority === 'medium' ? '#92400e' : '#1e40af',
+                  }}>
+                    {selectedTask.priority === 'high' ? '🔴 Alta' : selectedTask.priority === 'medium' ? '🟡 Media' : '🟢 Baja'}
+                  </span>
+                  <span style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    background: selectedTask.status === 'completed' ? '#dcfce7' : '#fef3c7',
+                    color: selectedTask.status === 'completed' ? '#166534' : '#92400e',
+                  }}>
+                    {selectedTask.status === 'completed' ? '✅ Completada' : '⏳ Pendiente'}
+                  </span>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <h3 style={{ margin: '0 0 8px 0', color: theme === 'light' ? '#666' : '#9ca3af', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Descripción</h3>
+                  <p style={{ margin: 0, color: theme === 'light' ? '#333' : '#e5e7eb', lineHeight: '1.6' }}>
+                    {selectedTask.description || 'Sin descripción'}
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 8px 0', color: theme === 'light' ? '#666' : '#9ca3af', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Fecha de Vencimiento</h3>
+                    <p style={{ margin: 0, color: theme === 'light' ? '#333' : '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>
+                      📅 {new Date(selectedTask.dueDate).toLocaleDateString('es-ES')}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 style={{ margin: '0 0 8px 0', color: theme === 'light' ? '#666' : '#9ca3af', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Creador</h3>
+                    <p style={{ margin: 0, color: theme === 'light' ? '#333' : '#e5e7eb', fontSize: '14px', fontWeight: '500' }}>
+                      👤 {selectedTask.creatorName || selectedTask.creatorEmail || 'Sistema'}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedTask.createdAt && (
+                  <div style={{ marginBottom: '20px', paddingTop: '20px', borderTop: `1px solid ${theme === 'light' ? '#eee' : '#374151'}` }}>
+                    <p style={{ margin: 0, color: theme === 'light' ? '#999' : '#9ca3af', fontSize: '12px' }}>
+                      Creada: {new Date(selectedTask.createdAt).toLocaleDateString('es-ES')} a las {new Date(selectedTask.createdAt).toLocaleTimeString('es-ES')}
+                    </p>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <button
+                    onClick={() => {
+                      if (selectedTask.status === 'completed') {
+                        toggleTaskCompletion(selectedTask.id);
+                        setShowTaskDetail(false);
+                      } else {
+                        setShowCompletionModal(true);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '10px 16px',
+                      background: selectedTask.status === 'completed' ? '#fbbf24' : '#00A86B',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = selectedTask.status === 'completed' ? '#f59e0b' : '#008C5A';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = selectedTask.status === 'completed' ? '#fbbf24' : '#00A86B';
+                    }}
+                  >
+                    {selectedTask.status === 'completed' ? '↩️ Marcar como Pendiente' : '✅ Marcar como Completada'}
+                  </button>
+                  <button
+                    onClick={() => setShowTaskDetail(false)}
+                    style={{
+                      padding: '10px 16px',
+                      background: theme === 'light' ? '#e5e7eb' : '#374151',
+                      color: theme === 'light' ? '#333' : '#e5e7eb',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = theme === 'light' ? '#d1d5db' : '#4b5563';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = theme === 'light' ? '#e5e7eb' : '#374151';
+                    }}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Finalización con Notas */}
+          {showCompletionModal && selectedTask && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1001,
+            }} onClick={() => setShowCompletionModal(false)}>
+              <div style={{
+                background: theme === 'light' ? 'white' : '#1f2937',
+                borderRadius: '12px',
+                padding: '30px',
+                maxWidth: '500px',
+                width: '90%',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+              }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                  <h2 style={{ margin: 0, color: theme === 'light' ? '#1f2937' : '#f3f4f6', fontSize: '22px' }}>
+                    ✅ Finalizar Tarea
+                  </h2>
+                  <button
+                    onClick={() => setShowCompletionModal(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '24px',
+                      cursor: 'pointer',
+                      color: theme === 'light' ? '#666' : '#9ca3af',
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ margin: '0 0 10px 0', color: theme === 'light' ? '#333' : '#e5e7eb', fontWeight: '500' }}>
+                    Tarea: <strong>{selectedTask.title}</strong>
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    color: theme === 'light' ? '#666' : '#9ca3af',
+                    fontSize: '12px',
+                    textTransform: 'uppercase',
+                    fontWeight: '600',
+                  }}>
+                    Detalle Final (Opcional)
+                  </label>
+                  <textarea
+                    value={completionNotes}
+                    onChange={(e) => setCompletionNotes(e.target.value)}
+                    placeholder="Agrega un detalle sobre cómo se completó la tarea..."
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      border: `1px solid ${theme === 'light' ? '#e5e7eb' : '#374151'}`,
+                      background: theme === 'light' ? '#f9fafb' : '#111827',
+                      color: theme === 'light' ? '#333' : '#e5e7eb',
+                      fontFamily: 'inherit',
+                      fontSize: '14px',
+                      minHeight: '100px',
+                      resize: 'vertical',
+                    }}
+                  />
+                  <p style={{
+                    margin: '8px 0 0 0',
+                    fontSize: '12px',
+                    color: theme === 'light' ? '#999' : '#9ca3af',
+                  }}>
+                    {completionNotes.length} caracteres
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <button
+                    onClick={handleCompleteTaskWithNotes}
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      background: '#00A86B',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#008C5A';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#00A86B';
+                    }}
+                  >
+                    ✅ Finalizar Tarea
+                  </button>
+                  <button
+                    onClick={() => setShowCompletionModal(false)}
+                    style={{
+                      padding: '12px 16px',
+                      background: theme === 'light' ? '#e5e7eb' : '#374151',
+                      color: theme === 'light' ? '#333' : '#e5e7eb',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = theme === 'light' ? '#d1d5db' : '#4b5563';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = theme === 'light' ? '#e5e7eb' : '#374151';
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

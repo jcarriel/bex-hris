@@ -40,7 +40,7 @@ export const createEmployeeSchema = z.object({
   phone: z.string().optional(),
   departmentId: z.string().uuid('Invalid department ID'),
   positionId: z.string().uuid('Invalid position ID'),
-  baseSalary: z.number().positive('Salary must be positive').optional(),
+  earnedSalary: z.number().positive('Salary must be positive').optional(),
   contractStartDate: z.string().datetime().optional(),
   contractEndDate: z.string().datetime().optional(),
   status: z.enum(['active', 'inactive', 'terminated']).default('active'),
@@ -112,7 +112,7 @@ export const approveLeaveSchema = z.object({
 export const createPayrollSchema = z.object({
   employeeId: z.string().uuid('Invalid employee ID'),
   period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
-  baseSalary: z.number().positive('Salary must be positive'),
+  earnedSalary: z.number().positive('Salary must be positive'),
   bonuses: z.number().nonnegative().default(0),
   deductions: z.number().nonnegative().default(0),
   netSalary: z.number().positive('Net salary must be positive'),
@@ -132,7 +132,7 @@ export const uploadDocumentSchema = z.object({
 export const createTaskSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters').max(200),
   description: z.string().max(1000).optional(),
-  dueDate: z.string().datetime('Invalid date format'),
+  dueDate: z.string().min(1, 'Due date is required'),
   status: z.enum(['pending', 'in-progress', 'completed', 'cancelled']).default('pending'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   assignedTo: z.string().uuid('Invalid user ID').optional(),

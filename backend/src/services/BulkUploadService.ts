@@ -97,9 +97,11 @@ export class BulkUploadService {
             department = await DepartmentService.createDepartment(departmentName, '');
           }
 
-          // Obtener o crear posición (Cargo)
+          // Obtener o crear posición (Cargo) - DEBE pertenecer al departamento correcto
           const positions = await PositionService.getAllPositions();
-          let position = positions.find((p: any) => p.name.toUpperCase() === positionName);
+          let position = positions.find((p: any) => 
+            p.name.toUpperCase() === positionName && p.departmentId === department.id
+          );
           if (!position) {
             position = await PositionService.createPosition(
               positionName,

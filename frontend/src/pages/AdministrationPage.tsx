@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { showSuccess, showError, showConfirm } from '../utils/alertify';
 import { useThemeStore } from '../stores/themeStore';
+import { useAuthStore } from '../stores/authStore';
 import NotificationsPage from './NotificationsPage';
+import RecurringTasksPage from './RecurringTasksPage';
 
 export default function AdministrationPage() {
   const { theme } = useThemeStore();
+  const { user } = useAuthStore((state: any) => ({ user: state.user }));
   const [activeTab, setActiveTab] = useState('departments');
   const [departments, setDepartments] = useState([]);
   const [positions, setPositions] = useState([]);
@@ -332,11 +335,15 @@ export default function AdministrationPage() {
   const handleTaskSubmit = async (e: any) => {
     e.preventDefault();
     try {
+      const taskData = {
+        ...taskFormData,
+        createdBy: user?.id || null,
+      };
       if (editingId) {
-        await api.client.put(`/tasks/${editingId}`, taskFormData);
+        await api.client.put(`/tasks/${editingId}`, taskData);
         showSuccess('Tarea actualizada exitosamente');
       } else {
-        await api.client.post('/tasks', taskFormData);
+        await api.client.post('/tasks', taskData);
         showSuccess('Tarea creada exitosamente');
       }
       fetchAllData();
@@ -378,9 +385,8 @@ export default function AdministrationPage() {
     { id: 'departments', label: 'Centros de Costo', icon: '🏢' },
     { id: 'positions', label: 'Cargos', icon: '💼' },
     { id: 'labors', label: 'Labores', icon: '🎯' },
-    { id: 'categories', label: 'Categorías de Documentos', icon: '📁' },
-    { id: 'tasks', label: 'Tareas', icon: '📋' },
     { id: 'schedules', label: 'Configuración de Horarios', icon: '⏰' },
+    { id: 'recurringTasks', label: 'Tareas Recurrentes', icon: '📅' },
     { id: 'notifications', label: 'Notificaciones', icon: '🔔' },
   ];
 
@@ -408,8 +414,8 @@ export default function AdministrationPage() {
         ))}
       </div>
 
-      {/* Add Button - Only show for non-notifications tabs */}
-      {activeTab !== 'notifications' && (
+      {/* Add Button - Only show for non-notifications and non-recurringTasks tabs */}
+      {activeTab !== 'notifications' && activeTab !== 'recurringTasks' && (
         <div style={{ marginBottom: '20px' }}>
           <button
             onClick={() => {
@@ -664,13 +670,6 @@ export default function AdministrationPage() {
                     <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Acciones</th>
                   </>
                 )}
-                {activeTab === 'categories' && (
-                  <>
-                    <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Nombre</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Descripción</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Acciones</th>
-                  </>
-                )}
               </tr>
             </thead>
             <tbody>
@@ -788,150 +787,10 @@ export default function AdministrationPage() {
                   )}
                 </>
               )}
-
-              {activeTab === 'categories' && (
-                <>
-                  {categories.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                        No hay categorías registradas
-                      </td>
-                    </tr>
-                  ) : (
-                    categories.map((cat: any) => (
-                      <tr key={cat.id} style={{ borderBottom: `1px solid ${theme === 'light' ? '#eee' : '#374151'}`, background: theme === 'light' ? 'white' : '#111827' }}>
-                        <td style={{ padding: '12px', color: theme === 'light' ? '#333' : '#ffffff' }}>{cat.name}</td>
-                        <td style={{ padding: '12px', color: theme === 'light' ? '#333' : '#ffffff' }}>{cat.description || '-'}</td>
-                        <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
-                          <button
-                            onClick={() => editCategory(cat)}
-                            style={{ padding: '4px 12px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', transition: 'background 0.2s' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
-                          >
-                            ✏️ Editar
-                          </button>
-                          <button
-                            onClick={() => deleteCategory(cat.id)}
-                            style={{ padding: '4px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
-                          >
-                            🗑 Eliminar
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </>
-              )}
             </tbody>
           </table>
         )}
 
-        {/* TASKS */}
-        {activeTab === 'tasks' && (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: theme === 'light' ? '#f5f7fa' : '#374151', borderBottom: `2px solid ${theme === 'light' ? '#eee' : '#374151'}` }}>
-                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Título</th>
-                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Descripción</th>
-                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Fecha Vencimiento</th>
-                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Prioridad</th>
-                <th style={{ padding: '12px', textAlign: 'left', color: theme === 'light' ? '#666' : '#9ca3af' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {showForm && activeTab === 'tasks' && (
-                <>
-                  <tr style={{ background: '#f9f9f9', borderBottom: '1px solid #eee' }}>
-                    <td colSpan={5} style={{ padding: '15px' }}>
-                      <form onSubmit={handleTaskSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                        <input
-                          type="text"
-                          placeholder="Título"
-                          value={taskFormData.title}
-                          onChange={(e) => setTaskFormData({ ...taskFormData, title: e.target.value })}
-                          style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                          required
-                        />
-                        <input
-                          type="datetime-local"
-                          value={taskFormData.dueDate}
-                          onChange={(e) => setTaskFormData({ ...taskFormData, dueDate: e.target.value })}
-                          style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                          required
-                        />
-                        <textarea
-                          placeholder="Descripción"
-                          value={taskFormData.description}
-                          onChange={(e) => setTaskFormData({ ...taskFormData, description: e.target.value })}
-                          style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', gridColumn: '1 / -1' }}
-                          rows={3}
-                        />
-                        <select
-                          value={taskFormData.priority}
-                          onChange={(e) => setTaskFormData({ ...taskFormData, priority: e.target.value })}
-                          style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', gridColumn: '1 / -1' }}
-                        >
-                          <option value="low">Baja</option>
-                          <option value="medium">Media</option>
-                          <option value="high">Alta</option>
-                        </select>
-                        <button type="submit" style={{ padding: '8px 16px', background: '#00A86B', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', gridColumn: '1 / -1', fontWeight: '500', transition: 'background 0.2s' }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = '#008C5A')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = '#00A86B')}
-                        >
-                          {editingId ? '✏️ Actualizar' : '✚ Crear'}
-                        </button>
-                      </form>
-                    </td>
-                  </tr>
-                </>
-              )}
-              {tasks.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                    No hay tareas registradas
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {tasks.map((task: any) => (
-                    <tr key={task.id} style={{ borderBottom: `1px solid ${theme === 'light' ? '#eee' : '#374151'}`, background: theme === 'light' ? 'white' : '#111827' }}>
-                      <td style={{ padding: '12px', color: theme === 'light' ? '#333' : '#ffffff' }}>{task.title}</td>
-                      <td style={{ padding: '12px', fontSize: '13px', color: theme === 'light' ? '#666' : '#9ca3af' }}>{task.description || '-'}</td>
-                      <td style={{ padding: '12px', fontSize: '13px', color: theme === 'light' ? '#333' : '#ffffff' }}>{new Date(task.dueDate).toLocaleDateString()}</td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{
-                          padding: '4px 8px',
-                          borderRadius: '3px',
-                          fontSize: '12px',
-                          background: task.priority === 'high' ? '#ffebee' : task.priority === 'medium' ? '#fff3e0' : '#e8f5e9',
-                          color: task.priority === 'high' ? '#c62828' : task.priority === 'medium' ? '#e65100' : '#2e7d32',
-                        }}>
-                          {task.priority === 'high' ? '🔴 Alta' : task.priority === 'medium' ? '🟡 Media' : '🟢 Baja'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px', display: 'flex', gap: '5px' }}>
-                        <button
-                          onClick={() => editTask(task)}
-                          style={{ padding: '4px 12px', background: '#0050b3', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
-                        >
-                          ✏️ Editar
-                        </button>
-                        <button
-                          onClick={() => deleteTask(task.id)}
-                          style={{ padding: '4px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}
-                        >
-                          🗑 Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </>
-              )}
-            </tbody>
-          </table>
-        )}
 
         {/* Schedule Configuration Tab */}
         {activeTab === 'schedules' && (
@@ -1152,6 +1011,11 @@ export default function AdministrationPage() {
               )}
             </tbody>
           </table>
+        )}
+
+        {/* Recurring Tasks Tab */}
+        {activeTab === 'recurringTasks' && (
+          <RecurringTasksPage />
         )}
 
         {/* Notifications Tab */}

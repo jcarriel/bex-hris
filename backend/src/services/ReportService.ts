@@ -105,7 +105,7 @@ export class ReportService {
       // Simular obtención de nóminas (en producción, consultar BD)
       const employeeList = employees.data || [];
       for (const emp of employeeList) {
-        const salary = (emp as any).baseSalary || 0;
+        const salary = (emp as any).earnedSalary || 0;
         totalPayroll += salary;
         payrolls.push({
           employeeId: emp.id,
