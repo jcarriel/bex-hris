@@ -1,17 +1,9 @@
 import LaborRepository from '../repositories/LaborRepository';
+import type { Labor } from '../repositories/LaborRepository';
 import logger from '@utils/logger';
 
-interface Labor {
-  id: string;
-  name: string;
-  description?: string;
-  positionId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 class LaborService {
-  createLabor(name: string, description: string, positionId: string): Labor {
+  async createLabor(name: string, description: string, positionId: string): Promise<Labor> {
     try {
       if (!name || !positionId) {
         throw new Error('Name and positionId are required');
@@ -23,7 +15,7 @@ class LaborService {
     }
   }
 
-  getLabors(): Labor[] {
+  async getLabors(): Promise<Labor[]> {
     try {
       return LaborRepository.getAll();
     } catch (error) {
@@ -32,7 +24,7 @@ class LaborService {
     }
   }
 
-  getLabor(id: string): Labor | undefined {
+  async getLabor(id: string): Promise<Labor | null> {
     try {
       return LaborRepository.getById(id);
     } catch (error) {
@@ -41,7 +33,7 @@ class LaborService {
     }
   }
 
-  getLaborsByPosition(positionId: string): Labor[] {
+  async getLaborsByPosition(positionId: string): Promise<Labor[]> {
     try {
       return LaborRepository.getByPositionId(positionId);
     } catch (error) {
@@ -50,7 +42,7 @@ class LaborService {
     }
   }
 
-  updateLabor(id: string, name: string, description: string, positionId: string): Labor | undefined {
+  async updateLabor(id: string, name: string, description: string, positionId: string): Promise<Labor | null> {
     try {
       if (!name || !positionId) {
         throw new Error('Name and positionId are required');
@@ -62,7 +54,7 @@ class LaborService {
     }
   }
 
-  deleteLabor(id: string): boolean {
+  async deleteLabor(id: string): Promise<boolean> {
     try {
       return LaborRepository.delete(id);
     } catch (error) {

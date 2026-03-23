@@ -14,7 +14,12 @@ class Logger {
 
   private formatMessage(level: LogLevel, message: string, data?: unknown): string {
     const timestamp = this.getTimestamp();
-    const dataStr = data ? ` ${JSON.stringify(data)}` : '';
+    let dataStr = '';
+    if (data instanceof Error) {
+      dataStr = ` — ${data.message}`;
+    } else if (data !== undefined && data !== null) {
+      dataStr = ` ${JSON.stringify(data)}`;
+    }
     return `[${timestamp}] [${level}] ${message}${dataStr}`;
   }
 

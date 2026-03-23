@@ -1,197 +1,234 @@
-import { Resend } from 'resend';
 import { getDatabase } from '../config/database';
+import EmailService from './EmailService';
+import NotificationRepository from '@repositories/NotificationRepository';
 import logger from '../utils/logger';
 
+const PRIORITY_LABEL: Record<string, string> = {
+  high:   '🔴 Alta',
+  medium: '🟡 Media',
+  low:    '🟢 Baja',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending:     'Pendiente',
+  in_progress: 'En progreso',
+  paused:      'Pausada',
+  completed:   'Completada',
+  rejected:    'Rechazada',
+};
+
 class TaskNotificationService {
-  private resend: Resend | null = null;
+  /** Send email + in-app notification to a list of user IDs */
+  private async notifyUsers(
+    userIds: string[],
+    notification: { type: string; title: string; message: string },
+    emailSubject: string,
+    emailHtml: string,
+  ): Promise<void> {
+    const db = getDatabase();
+    const unique = [...new Set(userIds.filter(Boolean))];
 
-  private getResend(): Resend | null {
-    if (!this.resend && process.env.RESEND_API_KEY) {
-      this.resend = new Resend(process.env.RESEND_API_KEY);
-    }
-    return this.resend;
-  }
-
-  private async getAllUserEmails(): Promise<string[]> {
-    try {
-      const db = getDatabase();
-      const users = await db.all('SELECT email FROM users WHERE email IS NOT NULL AND email != ""');
-      return users.map((u: any) => u.email).filter(Boolean);
-    } catch (error) {
-      logger.error('Error fetching user emails:', error);
-      const fallback = process.env.NOTIFICATION_EMAIL;
-      return fallback ? [fallback] : [];
-    }
-  }
-
-  private async sendToAllUsers(subject: string, html: string): Promise<void> {
-    const resend = this.getResend();
-    if (!resend) {
-      logger.warn('Resend API not configured. Set RESEND_API_KEY environment variable.');
-      return;
-    }
-
-    const emails = await this.getAllUserEmails();
-    if (emails.length === 0) {
-      logger.warn('No user emails found to send notification');
-      return;
-    }
-
-    const from = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-
-    for (const email of emails) {
+    for (const uid of unique) {
       try {
-        const result = await resend.emails.send({ from, to: email, subject, html });
-        if (result.error) {
-          logger.error(`Failed to send email to ${email}:`, result.error);
-        } else {
-          logger.info(`Notification sent to ${email}`);
+        // In-app
+        await NotificationRepository.create({ userId: uid, ...notification });
+
+        // Email via nodemailer (same transport the rest of the app uses)
+        const user = await db.get('SELECT email FROM users WHERE id = ?', [uid]);
+        if (user?.email) {
+          const ok = await EmailService.send({ to: user.email, subject: emailSubject, html: emailHtml });
+          if (ok) logger.info(`Task email sent to ${user.email}`);
         }
-      } catch (error) {
-        logger.error(`Error sending notification to ${email}:`, error);
+      } catch (err) {
+        logger.error(`Error notifying user ${uid}:`, err);
       }
     }
   }
 
-  async notifyTaskCreated(task: any, creator: any): Promise<void> {
-    try {
-      const subject = `Nueva Tarea Creada: ${task.title}`;
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #00A86B;">📋 Nueva Tarea Creada</h2>
-          <p>Se ha creado una nueva tarea en el sistema:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Título:</strong> ${task.title}</p>
-            <p><strong>Descripción:</strong> ${task.description || 'Sin descripción'}</p>
-            <p><strong>Fecha de Vencimiento:</strong> ${new Date(task.dueDate).toLocaleDateString('es-ES')}</p>
-            <p><strong>Prioridad:</strong> ${task.priority === 'high' ? '🔴 Alta' : task.priority === 'medium' ? '🟡 Media' : '🟢 Baja'}</p>
-            <p><strong>Creada por:</strong> ${creator?.username || creator?.email || 'Sistema'}</p>
-          </div>
-          
-          <p style="color: #666; font-size: 12px;">Esta es una notificación automática del sistema BEX HRIS</p>
-        </div>
-      `;
+  private buildHtml(task: any, heading: string, accentColor: string, extra = ''): string {
+    const dueDateStr = task.dueDate
+      ? new Date(task.dueDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : '—';
+    return `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f0f7f3;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7f3;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0"
+        style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.07);">
+        <tr>
+          <td style="background:${accentColor};padding:22px 32px;">
+            <div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px;">BEX HRIS</div>
+            <h1 style="margin:0;font-size:18px;font-weight:700;color:#fff;">${heading}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0"
+              style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+              <tr>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:#374151;width:130px;">Tarea</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#111827;">${task.title}</td>
+              </tr>
+              ${task.description ? `
+              <tr>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:#374151;">Descripción</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">${task.description}</td>
+              </tr>` : ''}
+              <tr>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:#374151;">Estado</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${STATUS_LABEL[task.status] ?? task.status}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:#374151;">Prioridad</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${PRIORITY_LABEL[task.priority] ?? task.priority}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#374151;">Vence</td>
+                <td style="padding:10px 14px;font-size:13px;color:#374151;">${dueDateStr}</td>
+              </tr>
+            </table>
+            ${extra}
+            <p style="margin:20px 0 0;font-size:11px;color:#9ca3af;text-align:center;">
+              Correo automático · BEX HRIS
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+  }
 
-      await this.sendToAllUsers(subject, html);
-      logger.info(`Task creation notification sent for task: ${task.id}`);
-    } catch (error) {
-      logger.error('Error sending task creation notification:', error);
-    }
+  async notifyTaskCreated(task: any, creator: any): Promise<void> {
+    if (!task.assignedTo) return;
+    const creatorName = creator?.nombre || creator?.username || 'Sistema';
+    const html = this.buildHtml(
+      task,
+      '📋 Te han asignado una tarea',
+      '#3b82f6',
+      `<p style="font-size:13px;color:#374151;margin:0;">Asignada por <strong>${creatorName}</strong>. Ingresa al sistema para verla.</p>`,
+    );
+    await this.notifyUsers(
+      [task.assignedTo],
+      { type: 'task_assigned', title: `Nueva tarea: ${task.title}`, message: `${creatorName} te asignó una tarea.` },
+      `BEX HRIS — Nueva tarea asignada: ${task.title}`,
+      html,
+    );
+  }
+
+  async notifyStatusChanged(task: any, changedBy: any, oldStatus: string): Promise<void> {
+    const byName = changedBy?.nombre || changedBy?.username || 'Sistema';
+    const recipients = [task.createdBy, task.assignedTo].filter((id) => id && id !== changedBy?.id);
+    if (!recipients.length) return;
+    const html = this.buildHtml(
+      task,
+      '🔄 Estado de tarea actualizado',
+      '#8b5cf6',
+      `<p style="font-size:13px;color:#374151;margin:0;">
+        <strong>${byName}</strong> cambió el estado de
+        <strong>${STATUS_LABEL[oldStatus] ?? oldStatus}</strong> a
+        <strong>${STATUS_LABEL[task.status] ?? task.status}</strong>.
+      </p>`,
+    );
+    await this.notifyUsers(
+      recipients,
+      { type: 'task_status', title: `Tarea "${task.title}" — ${STATUS_LABEL[task.status] ?? task.status}`, message: `${byName} cambió el estado.` },
+      `BEX HRIS — Tarea actualizada: ${task.title}`,
+      html,
+    );
+  }
+
+  async notifyTaskRejected(task: any, rejectedBy: any): Promise<void> {
+    const byName = rejectedBy?.nombre || rejectedBy?.username || 'El asignado';
+    const recipients = [task.createdBy].filter((id) => id && id !== rejectedBy?.id);
+    if (!recipients.length) return;
+    const html = this.buildHtml(
+      task,
+      '❌ Tarea rechazada',
+      '#dc2626',
+      `<p style="font-size:13px;color:#374151;margin:0;">
+        <strong>${byName}</strong> rechazó la tarea.
+        ${task.completionNotes ? `<br><em>Motivo: ${task.completionNotes}</em>` : ''}
+      </p>`,
+    );
+    await this.notifyUsers(
+      recipients,
+      { type: 'task_rejected', title: `Tarea rechazada: ${task.title}`, message: `${byName} rechazó la tarea.` },
+      `BEX HRIS — Tarea rechazada: ${task.title}`,
+      html,
+    );
+  }
+
+  async notifyTaskReassigned(task: any, reassignedBy: any, oldAssigneeId: string | null): Promise<void> {
+    const byName = reassignedBy?.nombre || reassignedBy?.username || 'Sistema';
+    const recipients = [task.assignedTo, oldAssigneeId].filter((id) => id && id !== reassignedBy?.id);
+    if (!recipients.length) return;
+    const html = this.buildHtml(
+      task,
+      '👤 Tarea reasignada',
+      '#f59e0b',
+      `<p style="font-size:13px;color:#374151;margin:0;"><strong>${byName}</strong> reasignó esta tarea.</p>`,
+    );
+    await this.notifyUsers(
+      recipients,
+      { type: 'task_reassigned', title: `Tarea reasignada: ${task.title}`, message: `${byName} reasignó la tarea.` },
+      `BEX HRIS — Tarea reasignada: ${task.title}`,
+      html,
+    );
   }
 
   async notifyTaskCompleted(task: any, completedBy: any): Promise<void> {
-    try {
-      const subject = `Tarea Completada: ${task.title}`;
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #28a745;">✅ Tarea Completada</h2>
-          <p>Una tarea ha sido marcada como completada:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Título:</strong> ${task.title}</p>
-            <p><strong>Descripción:</strong> ${task.description || 'Sin descripción'}</p>
-            <p><strong>Fecha de Vencimiento:</strong> ${new Date(task.dueDate).toLocaleDateString('es-ES')}</p>
-            <p><strong>Completada por:</strong> ${completedBy?.username || completedBy?.email || 'Sistema'}</p>
-            <p><strong>Fecha de Completado:</strong> ${new Date().toLocaleDateString('es-ES')} a las ${new Date().toLocaleTimeString('es-ES')}</p>
-          </div>
-          
-          <p style="color: #666; font-size: 12px;">Esta es una notificación automática del sistema BEX HRIS</p>
-        </div>
-      `;
-
-      await this.sendToAllUsers(subject, html);
-      logger.info(`Task completion notification sent for task: ${task.id}`);
-    } catch (error) {
-      logger.error('Error sending task completion notification:', error);
-    }
-  }
-
-  async notifyTaskUpdated(task: any, updatedBy: any): Promise<void> {
-    try {
-      const subject = `Tarea Actualizada: ${task.title}`;
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #f0ad4e;">✏️ Tarea Actualizada</h2>
-          <p>Una tarea ha sido modificada:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Título:</strong> ${task.title}</p>
-            <p><strong>Descripción:</strong> ${task.description || 'Sin descripción'}</p>
-            <p><strong>Fecha de Vencimiento:</strong> ${new Date(task.dueDate).toLocaleDateString('es-ES')}</p>
-            <p><strong>Prioridad:</strong> ${task.priority === 'high' ? '🔴 Alta' : task.priority === 'medium' ? '🟡 Media' : '🟢 Baja'}</p>
-            <p><strong>Modificada por:</strong> ${updatedBy?.username || updatedBy?.email || 'Sistema'}</p>
-          </div>
-          
-          <p style="color: #666; font-size: 12px;">Esta es una notificación automática del sistema BEX HRIS</p>
-        </div>
-      `;
-
-      await this.sendToAllUsers(subject, html);
-      logger.info(`Task update notification sent for task: ${task.id}`);
-    } catch (error) {
-      logger.error('Error sending task update notification:', error);
-    }
+    const byName = completedBy?.nombre || completedBy?.username || 'Sistema';
+    const recipients = [task.createdBy].filter((id) => id && id !== completedBy?.id);
+    if (!recipients.length) return;
+    const html = this.buildHtml(task, '✅ Tarea completada', '#10b981',
+      `<p style="font-size:13px;color:#374151;margin:0;"><strong>${byName}</strong> completó la tarea.</p>`);
+    await this.notifyUsers(
+      recipients,
+      { type: 'task_completed', title: `Completada: ${task.title}`, message: `${byName} completó la tarea.` },
+      `BEX HRIS — Tarea completada: ${task.title}`,
+      html,
+    );
   }
 
   async notifyTaskDeleted(task: any, deletedBy: any): Promise<void> {
-    try {
-      const subject = `Tarea Eliminada: ${task.title}`;
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #dc3545;">🗑️ Tarea Eliminada</h2>
-          <p>Una tarea ha sido eliminada del sistema:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Título:</strong> ${task.title}</p>
-            <p><strong>Descripción:</strong> ${task.description || 'Sin descripción'}</p>
-            <p><strong>Fecha de Vencimiento:</strong> ${new Date(task.dueDate).toLocaleDateString('es-ES')}</p>
-            <p><strong>Eliminada por:</strong> ${deletedBy?.username || deletedBy?.email || 'Sistema'}</p>
-          </div>
-          
-          <p style="color: #666; font-size: 12px;">Esta es una notificación automática del sistema BEX HRIS</p>
-        </div>
-      `;
-
-      await this.sendToAllUsers(subject, html);
-      logger.info(`Task deletion notification sent for task: ${task.id}`);
-    } catch (error) {
-      logger.error('Error sending task deletion notification:', error);
+    const byName = deletedBy?.nombre || deletedBy?.username || 'Sistema';
+    const recipients = [task.assignedTo, task.createdBy].filter((id) => id && id !== deletedBy?.id);
+    if (!recipients.length) return;
+    const db = getDatabase();
+    for (const uid of [...new Set(recipients)]) {
+      try {
+        await NotificationRepository.create({
+          userId: uid,
+          type: 'task_deleted',
+          title: `Tarea eliminada: ${task.title}`,
+          message: `${byName} eliminó la tarea.`,
+        });
+        const user = await db.get('SELECT email FROM users WHERE id = ?', [uid]);
+        if (user?.email) {
+          await EmailService.send({
+            to: user.email,
+            subject: `BEX HRIS — Tarea eliminada: ${task.title}`,
+            html: this.buildHtml(task, '🗑️ Tarea eliminada', '#6b7280',
+              `<p style="font-size:13px;color:#374151;margin:0;"><strong>${byName}</strong> eliminó esta tarea.</p>`),
+          });
+        }
+      } catch (err) {
+        logger.error(`Error notifying deletion to ${uid}:`, err);
+      }
     }
   }
 
-  async notifyTaskReopened(task: any, reopenedBy: any): Promise<void> {
-    try {
-      const subject = `Tarea Reabierta: ${task.title}`;
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #17a2b8;">🔄 Tarea Reabierta</h2>
-          <p>Una tarea completada ha sido marcada como pendiente nuevamente:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Título:</strong> ${task.title}</p>
-            <p><strong>Descripción:</strong> ${task.description || 'Sin descripción'}</p>
-            <p><strong>Fecha de Vencimiento:</strong> ${new Date(task.dueDate).toLocaleDateString('es-ES')}</p>
-            <p><strong>Reabierta por:</strong> ${reopenedBy?.username || reopenedBy?.email || 'Sistema'}</p>
-          </div>
-          
-          <p style="color: #666; font-size: 12px;">Esta es una notificación automática del sistema BEX HRIS</p>
-        </div>
-      `;
-
-      await this.sendToAllUsers(subject, html);
-      logger.info(`Task reopened notification sent for task: ${task.id}`);
-    } catch (error) {
-      logger.error('Error sending task reopened notification:', error);
-    }
-  }
-
+  // Kept for backward compat with other callers
+  async notifyTaskUpdated(_task: any, _updatedBy: any): Promise<void> {}
+  async notifyTaskReopened(_task: any, _reopenedBy: any): Promise<void> {}
   async sendOverdueTasksEmail(subject: string, html: string): Promise<void> {
-    try {
-      await this.sendToAllUsers(subject, html);
-      logger.info('Overdue tasks notification sent to all users');
-    } catch (error) {
-      logger.error('Error sending overdue tasks notification:', error);
+    const db = getDatabase();
+    const users = await db.all(`SELECT email FROM users WHERE email IS NOT NULL AND email != '' AND status != 'inactive'`);
+    for (const u of users as any[]) {
+      if (u.email) await EmailService.send({ to: u.email, subject, html });
     }
   }
 }

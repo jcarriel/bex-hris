@@ -17,19 +17,50 @@ export class UserRepository {
     return this.findById(id) as Promise<User>;
   }
 
+  async createAdmin(data: {
+    nombre: string; username: string; email: string; password: string;
+    roleId: string | null; role: string; status: string;
+  }): Promise<User> {
+    const db = getDatabase();
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    await db.run(
+      `INSERT INTO users (id, username, password, email, nombre, role, roleId, status, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, data.username, data.password, data.email, data.nombre, data.role, data.roleId, data.status, now, now]
+    );
+
+    return this.findById(id) as Promise<User>;
+  }
+
+  async getAllWithRoles(): Promise<any[]> {
+    const db = getDatabase();
+    return db.all(`
+      SELECT u.id, u.username, u.email, u.nombre, u.role, u.roleId, u.status, u.createdAt, u.updatedAt,
+             r.name AS roleName, r.permissions AS rolePermissions
+      FROM users u
+      LEFT JOIN roles r ON u.roleId = r.id
+      ORDER BY u.createdAt DESC
+    `);
+  }
+
   async findById(id: string): Promise<User | null> {
     const db = getDatabase();
-    return db.get('SELECT * FROM users WHERE id = ?', [id]) || null;
+    const row = await db.get('SELECT * FROM users WHERE id = ?', [id]);
+    return row ?? null;
   }
 
   async findByUsername(username: string): Promise<User | null> {
     const db = getDatabase();
-    return db.get('SELECT * FROM users WHERE username = ?', [username]) || null;
+    const row = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    return row ?? null;
   }
 
   async findByEmail(email: string): Promise<User | null> {
     const db = getDatabase();
-    return db.get('SELECT * FROM users WHERE email = ?', [email]) || null;
+    const row = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    return row ?? null;
   }
 
   async update(id: string, data: Partial<User>): Promise<User | null> {

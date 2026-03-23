@@ -9,7 +9,7 @@ export class DepartmentRepository {
     const now = new Date().toISOString();
 
     await db.run(
-      `INSERT INTO departments (id, name, description, createdAt, updatedAt)
+      `INSERT INTO centros_costo (id, name, description, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?)`,
       [id, name, description || null, now, now]
     );
@@ -19,13 +19,13 @@ export class DepartmentRepository {
 
   async findById(id: string): Promise<Department | null> {
     const db = getDatabase();
-    const result = await db.get('SELECT * FROM departments WHERE id = ?', [id]);
+    const result = await db.get('SELECT * FROM centros_costo WHERE id = ?', [id]);
     return (result as Department) || null;
   }
 
   async findAll(): Promise<Department[]> {
     const db = getDatabase();
-    return db.all('SELECT * FROM departments ORDER BY name');
+    return db.all('SELECT * FROM centros_costo ORDER BY name');
   }
 
   async update(id: string, data: Partial<Department>): Promise<Department | null> {
@@ -51,7 +51,7 @@ export class DepartmentRepository {
     values.push(id);
 
     await db.run(
-      `UPDATE departments SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE centros_costo SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
 
@@ -60,7 +60,7 @@ export class DepartmentRepository {
 
   async delete(id: string): Promise<boolean> {
     const db = getDatabase();
-    const result = await db.run('DELETE FROM departments WHERE id = ?', [id]);
+    const result = await db.run('DELETE FROM centros_costo WHERE id = ?', [id]);
     return (result.changes ?? 0) > 0;
   }
 }

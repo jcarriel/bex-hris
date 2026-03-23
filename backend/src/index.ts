@@ -3,22 +3,32 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import multer from 'multer';
-import { initializeDatabase } from '@config/database';
-import { authMiddleware } from '@middleware/auth';
+import { initializeDatabase, getDatabase } from '@config/database';
+import { authMiddleware, adminMiddleware } from '@middleware/auth';
 import AuthController from '@controllers/AuthController';
+import UserAdminController from '@controllers/UserAdminController';
+import RoleController from '@controllers/RoleController';
 import EmployeeController from '@controllers/EmployeeController';
 import ResourceController from '@controllers/ResourceController';
 import RecurringTaskController from '@controllers/RecurringTaskController';
+import CatalogController from '@controllers/CatalogController';
 import SchedulerService from '@services/SchedulerService';
 import DailyControlService from '@services/DailyControlService';
 import TaskSchedulerService from '@services/TaskSchedulerService';
 import RecurringTaskService from '@services/RecurringTaskService';
 import RecurringTaskGeneratorService from '@services/RecurringTaskGeneratorService';
+import EventController from '@controllers/EventController';
+import TaskController from '@controllers/TaskController';
+import NotificationController from '@controllers/NotificationController';
+import WorkforceController from '@controllers/WorkforceController';
+import SocialCaseController from '@controllers/SocialCaseController';
+import EventDigestScheduler from '@services/EventDigestScheduler';
+import EventTypeConfigService from '@services/EventTypeConfigService';
 import logger from '@utils/logger';
 import errorLogger from '@utils/errorLogger';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 // Configurar multer para subida de archivos
 const upload = multer({ storage: multer.memoryStorage() });
@@ -53,6 +63,20 @@ app.post('/api/auth/change-password', authMiddleware, (req, res) =>
   AuthController.changePassword(req, res)
 );
 
+// Admin user routes (admin only)
+app.get('/api/admin/users',                      authMiddleware, adminMiddleware, (req, res) => UserAdminController.getAll(req, res));
+app.post('/api/admin/users',                     authMiddleware, adminMiddleware, (req, res) => UserAdminController.create(req, res));
+app.put('/api/admin/users/:id',                  authMiddleware, adminMiddleware, (req, res) => UserAdminController.update(req, res));
+app.delete('/api/admin/users/:id',               authMiddleware, adminMiddleware, (req, res) => UserAdminController.delete(req, res));
+app.post('/api/admin/users/:id/reset-password',  authMiddleware, adminMiddleware, (req, res) => UserAdminController.resetPassword(req, res));
+
+// Roles routes (admin only for write, all authenticated for read)
+app.get('/api/roles',         authMiddleware,                    (req, res) => RoleController.getAll(req, res));
+app.get('/api/roles/modules', authMiddleware,                    (req, res) => RoleController.getModules(req, res));
+app.post('/api/roles',        authMiddleware, adminMiddleware,   (req, res) => RoleController.create(req, res));
+app.put('/api/roles/:id',     authMiddleware, adminMiddleware,   (req, res) => RoleController.update(req, res));
+app.delete('/api/roles/:id',  authMiddleware, adminMiddleware,   (req, res) => RoleController.delete(req, res));
+
 // Employee routes
 app.post('/api/employees', authMiddleware, (req, res) => EmployeeController.create(req, res));
 app.get('/api/employees', authMiddleware, (req, res) => EmployeeController.getAll(req, res));
@@ -86,6 +110,7 @@ app.delete('/api/department-schedules/:id', authMiddleware, (req, res) => Resour
 // Position routes
 app.post('/api/positions', authMiddleware, (req, res) => ResourceController.createPosition(req, res));
 app.get('/api/positions', authMiddleware, (req, res) => ResourceController.getPositions(req, res));
+app.put('/api/positions/:id', authMiddleware, (req, res) => ResourceController.updatePosition(req, res));
 app.delete('/api/positions/:id', authMiddleware, (req, res) => ResourceController.deletePosition(req, res));
 
 // Labor routes
@@ -93,6 +118,12 @@ app.post('/api/labors', authMiddleware, (req, res) => ResourceController.createL
 app.get('/api/labors', authMiddleware, (req, res) => ResourceController.getLabors(req, res));
 app.put('/api/labors/:id', authMiddleware, (req, res) => ResourceController.updateLabor(req, res));
 app.delete('/api/labors/:id', authMiddleware, (req, res) => ResourceController.deleteLabor(req, res));
+
+// Catalog routes
+app.get('/api/catalogs/:type', authMiddleware, (req, res) => CatalogController.getByType(req, res));
+app.post('/api/catalogs', authMiddleware, (req, res) => CatalogController.create(req, res));
+app.put('/api/catalogs/:id', authMiddleware, (req, res) => CatalogController.update(req, res));
+app.delete('/api/catalogs/:id', authMiddleware, (req, res) => CatalogController.delete(req, res));
 
 // Document Generator routes
 app.post('/api/document-templates', authMiddleware, (req, res) => ResourceController.createDocumentTemplate(req, res));
@@ -153,6 +184,16 @@ app.post('/api/leaves', authMiddleware, (req, res) => ResourceController.createL
 app.get('/api/leaves/pending', authMiddleware, (req, res) => ResourceController.getPendingLeaves(req, res));
 app.get('/api/leaves/:employeeId', authMiddleware, (req, res) => ResourceController.getLeaveByEmployee(req, res));
 app.post('/api/leaves/:id/approve', authMiddleware, (req, res) => ResourceController.approveLeave(req, res));
+app.post('/api/leaves/:id/reject', authMiddleware, (req, res) => ResourceController.rejectLeave(req, res));
+app.put('/api/leaves/:id', authMiddleware, (req, res) => ResourceController.updateLeave(req, res));
+app.delete('/api/leaves/:id', authMiddleware, (req, res) => ResourceController.deleteLeave(req, res));
+
+// Social Cases routes
+app.get('/api/social-cases', authMiddleware, (req, res) => SocialCaseController.getAll(req, res));
+app.post('/api/social-cases', authMiddleware, (req, res) => SocialCaseController.create(req, res));
+app.get('/api/social-cases/employee/:employeeId', authMiddleware, (req, res) => SocialCaseController.getByEmployee(req, res));
+app.put('/api/social-cases/:id', authMiddleware, (req, res) => SocialCaseController.update(req, res));
+app.delete('/api/social-cases/:id', authMiddleware, (req, res) => SocialCaseController.delete(req, res));
 
 // Document routes
 app.post('/api/documents/upload', authMiddleware, upload.single('file'), (req, res) => ResourceController.uploadDocument(req, res));
@@ -168,20 +209,33 @@ app.get('/api/document-categories', authMiddleware, (req, res) => ResourceContro
 app.put('/api/document-categories/:id', authMiddleware, (req, res) => ResourceController.updateDocumentCategory(req, res));
 app.delete('/api/document-categories/:id', authMiddleware, (req, res) => ResourceController.deleteDocumentCategory(req, res));
 
-// Tasks routes
-app.post('/api/tasks', authMiddleware, (req, res) => ResourceController.createTask(req, res));
-app.get('/api/tasks', authMiddleware, (req, res) => ResourceController.getAllTasks(req, res));
-app.get('/api/tasks/stats', authMiddleware, (req, res) => ResourceController.getTaskStats(req, res));
-app.get('/api/tasks/today', authMiddleware, (req, res) => ResourceController.getTodayTasks(req, res));
-app.get('/api/tasks/upcoming', authMiddleware, (req, res) => ResourceController.getUpcomingTasks(req, res));
-app.get('/api/tasks/completed', authMiddleware, (req, res) => ResourceController.getCompletedTasks(req, res));
-app.get('/api/tasks/:id', authMiddleware, (req, res) => ResourceController.getTaskById(req, res));
-app.put('/api/tasks/:id', authMiddleware, (req, res) => ResourceController.updateTask(req, res));
-app.delete('/api/tasks/:id', authMiddleware, (req, res) => ResourceController.deleteTask(req, res));
-app.put('/api/tasks/:id/complete', authMiddleware, (req, res) => ResourceController.markTaskAsCompleted(req, res));
-app.put('/api/tasks/:id/pending', authMiddleware, (req, res) => ResourceController.markTaskAsPending(req, res));
-app.get('/api/tasks/status/:status', authMiddleware, (req, res) => ResourceController.getTasksByStatus(req, res));
-app.get('/api/tasks/date/:date', authMiddleware, (req, res) => ResourceController.getTasksByDueDate(req, res));
+// Tasks routes (new TaskController)
+app.get('/api/tasks/my',            authMiddleware, (req, res) => TaskController.getMyTasks(req, res));
+app.get('/api/tasks/stats',         authMiddleware, (req, res) => TaskController.getStats(req, res));
+app.get('/api/tasks',               authMiddleware, (req, res) => TaskController.getAll(req, res));
+app.post('/api/tasks',              authMiddleware, (req, res) => TaskController.create(req, res));
+app.get('/api/tasks/:id/comments',  authMiddleware, (req, res) => TaskController.getComments(req, res));
+app.post('/api/tasks/:id/comments', authMiddleware, (req, res) => TaskController.addComment(req, res));
+app.put('/api/tasks/:id/status',    authMiddleware, (req, res) => TaskController.changeStatus(req, res));
+app.put('/api/tasks/:id/reassign',  authMiddleware, (req, res) => TaskController.reassign(req, res));
+app.get('/api/tasks/:id',           authMiddleware, (req, res) => TaskController.getById(req, res));
+app.put('/api/tasks/:id',           authMiddleware, (req, res) => TaskController.update(req, res));
+app.delete('/api/tasks/:id',        authMiddleware, (req, res) => TaskController.delete(req, res));
+
+// Users list (for task assignment - all authenticated users)
+app.get('/api/users', authMiddleware, async (req, res) => {
+  try {
+    const db = getDatabase();
+    const users = await db.all(`SELECT id, nombre, username, email FROM users WHERE status != 'inactive' ORDER BY nombre ASC`);
+    res.json({ success: true, data: users });
+  } catch { res.status(500).json({ success: false, message: 'Error' }); }
+});
+
+// Notifications routes
+app.get('/api/notifications',              authMiddleware, (req, res) => NotificationController.getMyNotifications(req, res));
+app.get('/api/notifications/unread-count', authMiddleware, (req, res) => NotificationController.getUnreadCount(req, res));
+app.put('/api/notifications/read-all',     authMiddleware, (req, res) => NotificationController.markAllRead(req, res));
+app.put('/api/notifications/:id/read',     authMiddleware, (req, res) => NotificationController.markRead(req, res));
 
 // Recurring Tasks routes
 app.post('/api/recurring-tasks', authMiddleware, (req, res) => RecurringTaskController.create(req, res));
@@ -212,6 +266,23 @@ app.delete('/api/benefits/:id', authMiddleware, (req, res) => ResourceController
 app.post('/api/benefits/assign', authMiddleware, (req, res) => ResourceController.assignBenefit(req, res));
 app.get('/api/benefits/employee/:employeeId', authMiddleware, (req, res) => ResourceController.getEmployeeBenefits(req, res));
 app.get('/api/benefits/employee/:employeeId/total', authMiddleware, (req, res) => ResourceController.calculateEmployeeBenefitsTotal(req, res));
+
+// Events routes
+app.get('/api/events/upcoming', authMiddleware, (req, res) => EventController.getUpcoming(req, res));
+app.get('/api/events', authMiddleware, (req, res) => EventController.getAll(req, res));
+app.post('/api/events', authMiddleware, (req, res) => EventController.create(req, res));
+app.put('/api/events/:id', authMiddleware, (req, res) => EventController.update(req, res));
+app.delete('/api/events/:id', authMiddleware, (req, res) => EventController.delete(req, res));
+app.post('/api/events/send-digest', authMiddleware, (req, res) => EventController.triggerDigest(req, res));
+app.get('/api/event-configs', authMiddleware, (req, res) => EventController.getConfigs(req, res));
+app.put('/api/event-configs/:type', authMiddleware, (req, res) => EventController.updateConfig(req, res));
+
+// Workforce routes
+app.get('/api/workforce',     authMiddleware, (req, res) => WorkforceController.getAll(req, res));
+app.post('/api/workforce',    authMiddleware, (req, res) => WorkforceController.create(req, res));
+app.get('/api/workforce/:id', authMiddleware, (req, res) => WorkforceController.getById(req, res));
+app.put('/api/workforce/:id', authMiddleware, (req, res) => WorkforceController.update(req, res));
+app.delete('/api/workforce/:id', authMiddleware, (req, res) => WorkforceController.delete(req, res));
 
 // Reports routes
 app.post('/api/reports/payroll', authMiddleware, (req, res) => ResourceController.generatePayrollReport(req, res));
@@ -257,6 +328,13 @@ async function startServer() {
     // Initialize recurring task generator
     RecurringTaskGeneratorService.initialize();
     logger.info('Recurring task generator initialized');
+
+    // Seed event type configs (inserts defaults if not present)
+    await EventTypeConfigService.seed();
+    logger.info('Event type configs seeded');
+
+    EventDigestScheduler.initialize();
+    logger.info('Event digest scheduler initialized');
 
     app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);

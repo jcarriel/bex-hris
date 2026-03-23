@@ -9,7 +9,7 @@ export class PositionRepository {
     const now = new Date().toISOString();
 
     await db.run(
-      `INSERT INTO positions (id, name, description, departmentId, salaryMin, salaryMax, createdAt, updatedAt)
+      `INSERT INTO cargos (id, name, description, departmentId, salaryMin, salaryMax, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, name, description || null, departmentId, salaryMin || 0, salaryMax || 0, now, now]
     );
@@ -19,7 +19,7 @@ export class PositionRepository {
 
   async findById(id: string): Promise<Position | null> {
     const db = getDatabase();
-    const row = await db.get('SELECT * FROM positions WHERE id = ?', [id]);
+    const row = await db.get('SELECT * FROM cargos WHERE id = ?', [id]);
     if (!row) return null;
     return {
       ...row,
@@ -29,7 +29,7 @@ export class PositionRepository {
 
   async findByDepartment(departmentId: string): Promise<Position[]> {
     const db = getDatabase();
-    const rows = await db.all('SELECT * FROM positions WHERE departmentId = ? ORDER BY name', [departmentId]);
+    const rows = await db.all('SELECT * FROM cargos WHERE departmentId = ? ORDER BY name', [departmentId]);
     return rows.map(row => ({
       ...row,
       salaryRange: { min: row.salaryMin, max: row.salaryMax }
@@ -38,7 +38,7 @@ export class PositionRepository {
 
   async findAll(): Promise<Position[]> {
     const db = getDatabase();
-    const rows = await db.all('SELECT * FROM positions ORDER BY name');
+    const rows = await db.all('SELECT * FROM cargos ORDER BY name');
     return rows.map(row => ({
       ...row,
       salaryRange: { min: row.salaryMin, max: row.salaryMax }
@@ -68,7 +68,7 @@ export class PositionRepository {
     values.push(id);
 
     await db.run(
-      `UPDATE positions SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE cargos SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
 
@@ -77,7 +77,7 @@ export class PositionRepository {
 
   async delete(id: string): Promise<boolean> {
     const db = getDatabase();
-    const result = await db.run('DELETE FROM positions WHERE id = ?', [id]);
+    const result = await db.run('DELETE FROM cargos WHERE id = ?', [id]);
     return (result.changes || 0) > 0;
   }
 }

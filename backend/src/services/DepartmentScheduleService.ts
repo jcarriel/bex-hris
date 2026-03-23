@@ -113,7 +113,7 @@ class DepartmentScheduleService {
     return db.all(`
       SELECT dsc.*, d.name as departmentName
       FROM departmentScheduleConfig dsc
-      LEFT JOIN departments d ON dsc.departmentId = d.id
+      LEFT JOIN centros_costo d ON dsc.departmentId = d.id
       ORDER BY d.name ASC
     `);
   }

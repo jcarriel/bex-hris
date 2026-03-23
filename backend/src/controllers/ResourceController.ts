@@ -107,6 +107,22 @@ export class ResourceController {
     }
   }
 
+  async updatePosition(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { name, description, salaryMin, salaryMax } = req.body;
+      const position = await PositionService.updatePosition(id, { name, description, salaryMin, salaryMax } as any);
+      if (!position) {
+        res.status(404).json({ success: false, message: 'Position not found' });
+        return;
+      }
+      res.status(200).json({ success: true, data: position });
+    } catch (error) {
+      logger.error('Update position error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update position' });
+    }
+  }
+
   async deletePosition(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -131,7 +147,7 @@ export class ResourceController {
         return;
       }
       const LaborService = (await import('../services/LaborService')).default;
-      const labor = LaborService.createLabor(name, description, positionId);
+      const labor = await LaborService.createLabor(name, description, positionId);
       res.status(201).json({ success: true, data: labor });
     } catch (error) {
       logger.error('Create labor error', error);
@@ -145,9 +161,9 @@ export class ResourceController {
       const LaborService = (await import('../services/LaborService')).default;
       let labors;
       if (positionId) {
-        labors = LaborService.getLaborsByPosition(positionId as string);
+        labors = await LaborService.getLaborsByPosition(positionId as string);
       } else {
-        labors = LaborService.getLabors();
+        labors = await LaborService.getLabors();
       }
       res.status(200).json({ success: true, data: labors });
     } catch (error) {
@@ -165,7 +181,7 @@ export class ResourceController {
         return;
       }
       const LaborService = (await import('../services/LaborService')).default;
-      const labor = LaborService.updateLabor(id, name, description, positionId);
+      const labor = await LaborService.updateLabor(id, name, description, positionId);
       if (!labor) {
         res.status(404).json({ success: false, message: 'Labor not found' });
         return;
@@ -181,7 +197,7 @@ export class ResourceController {
     try {
       const { id } = req.params;
       const LaborService = (await import('../services/LaborService')).default;
-      const result = LaborService.deleteLabor(id);
+      const result = await LaborService.deleteLabor(id);
       if (!result) {
         res.status(404).json({ success: false, message: 'Labor not found' });
         return;
@@ -348,6 +364,42 @@ export class ResourceController {
       res.status(200).json({ success: true, data: leave });
     } catch (error) {
       logger.error('Approve leave error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async rejectLeave(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const leave = await LeaveService.rejectLeave(id);
+      if (!leave) { res.status(404).json({ success: false, message: 'Leave not found' }); return; }
+      res.status(200).json({ success: true, data: leave });
+    } catch (error) {
+      logger.error('Reject leave error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async updateLeave(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const leave = await LeaveService.updateLeave(id, req.body);
+      if (!leave) { res.status(404).json({ success: false, message: 'Leave not found' }); return; }
+      res.status(200).json({ success: true, data: leave });
+    } catch (error) {
+      logger.error('Update leave error', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async deleteLeave(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const ok = await LeaveService.deleteLeave(id);
+      if (!ok) { res.status(404).json({ success: false, message: 'Leave not found' }); return; }
+      res.status(200).json({ success: true });
+    } catch (error) {
+      logger.error('Delete leave error', error);
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
     }
   }
@@ -1359,28 +1411,23 @@ export class ResourceController {
             const employeeData: any = {
               firstName: emp.name?.split(' ').slice(1).join(' ') || 'SIN NOMBRE',
               lastName: emp.name?.split(' ')[0] || 'SIN APELLIDO',
-              email: `emp${emp.cedula}@temp.local`,
-              personalEmail: `emp${emp.cedula}@temp.local`,
               cedula: emp.cedula,
-              phone: '',
-              personalPhone: '',
               departmentId: defaultDepartment.id,
               positionId: defaultPosition.id,
               hireDate: new Date().toISOString().split('T')[0],
               baseSalary: 0,
-              contractType: 'indefinite',
+              contratoTipo: '',
               status: 'active',
-              employeeNumber: `EMP-${emp.cedula}`,
               dateOfBirth: '',
-              gender: 'O',
-              maritalStatus: 'single',
-              address: '',
+              genero: 'O',
+              estadoCivil: 'single',
+              direccion: '',
             };
 
             const createdEmployee = await EmployeeService.createEmployee(employeeData);
             registered.push({
               ...createdEmployee,
-              missingFields: ['baseSalary', 'phone', 'dateOfBirth', 'gender', 'maritalStatus', 'address'],
+              missingFields: ['baseSalary', 'phone', 'dateOfBirth', 'genero', 'estadoCivil', 'direccion'],
               alreadyExists: false,
             });
           }

@@ -1,7 +1,8 @@
+import { getDatabase } from '@config/database';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '@utils/logger';
 
-interface Labor {
+export interface Labor {
   id: string;
   name: string;
   description?: string;
@@ -11,53 +12,53 @@ interface Labor {
 }
 
 class LaborRepository {
-  private labors: Labor[] = [];
+  async create(name: string, description: string, positionId: string): Promise<Labor> {
+    const db = getDatabase();
+    const id = uuidv4();
+    const now = new Date().toISOString();
 
-  create(name: string, description: string, positionId: string): Labor {
-    const labor: Labor = {
-      id: uuidv4(),
-      name,
-      description,
-      positionId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    this.labors.push(labor);
-    logger.info(`Labor created: ${labor.id}`);
-    return labor;
+    await db.run(
+      `INSERT INTO labores (id, name, description, positionId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, name, description || null, positionId, now, now]
+    );
+
+    logger.info(`Labor created: ${id}`);
+    return this.getById(id) as Promise<Labor>;
   }
 
-  getAll(): Labor[] {
-    return this.labors;
+  async getAll(): Promise<Labor[]> {
+    const db = getDatabase();
+    return db.all('SELECT * FROM labores ORDER BY name');
   }
 
-  getById(id: string): Labor | undefined {
-    return this.labors.find((labor) => labor.id === id);
+  async getById(id: string): Promise<Labor | null> {
+    const db = getDatabase();
+    return db.get('SELECT * FROM labores WHERE id = ?', [id]) || null;
   }
 
-  getByPositionId(positionId: string): Labor[] {
-    return this.labors.filter((labor) => labor.positionId === positionId);
+  async getByPositionId(positionId: string): Promise<Labor[]> {
+    const db = getDatabase();
+    return db.all('SELECT * FROM labores WHERE positionId = ? ORDER BY name', [positionId]);
   }
 
-  update(id: string, name: string, description: string, positionId: string): Labor | undefined {
-    const labor = this.labors.find((l) => l.id === id);
-    if (!labor) return undefined;
+  async update(id: string, name: string, description: string, positionId: string): Promise<Labor | null> {
+    const db = getDatabase();
+    const now = new Date().toISOString();
 
-    labor.name = name;
-    labor.description = description;
-    labor.positionId = positionId;
-    labor.updatedAt = new Date().toISOString();
+    await db.run(
+      `UPDATE labores SET name = ?, description = ?, positionId = ?, updatedAt = ? WHERE id = ?`,
+      [name, description || null, positionId, now, id]
+    );
+
     logger.info(`Labor updated: ${id}`);
-    return labor;
+    return this.getById(id);
   }
 
-  delete(id: string): boolean {
-    const index = this.labors.findIndex((labor) => labor.id === id);
-    if (index === -1) return false;
-
-    this.labors.splice(index, 1);
+  async delete(id: string): Promise<boolean> {
+    const db = getDatabase();
+    const result = await db.run('DELETE FROM labores WHERE id = ?', [id]);
     logger.info(`Labor deleted: ${id}`);
-    return true;
+    return (result.changes ?? 0) > 0;
   }
 }
 

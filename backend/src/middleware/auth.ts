@@ -4,10 +4,14 @@ import logger from '@utils/logger';
 
 export interface AuthRequest extends Request {
   userId?: string;
+  userRole?: string;
+  userRoleId?: string;
   user?: {
     id: string;
     username: string;
     email: string;
+    role?: string;
+    roleId?: string;
   };
 }
 
@@ -21,13 +25,13 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as {
-      id: string;
-      username: string;
-      email: string;
+      id: string; username: string; email: string; role?: string; roleId?: string;
     };
 
-    req.userId = decoded.id;
-    req.user = decoded;
+    req.userId    = decoded.id;
+    req.userRole  = decoded.role;
+    req.userRoleId = decoded.roleId;
+    req.user      = decoded;
     next();
   } catch (error) {
     logger.error('Authentication error', error);
@@ -35,27 +39,28 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
   }
 };
 
-export const optionalAuthMiddleware = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): void => {
+export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  if (req.userRole !== 'admin') {
+    res.status(403).json({ success: false, message: 'Se requiere rol de administrador' });
+    return;
+  }
+  next();
+};
+
+export const optionalAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
-
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as {
-        id: string;
-        username: string;
-        email: string;
+        id: string; username: string; email: string; role?: string; roleId?: string;
       };
-
-      req.userId = decoded.id;
-      req.user = decoded;
+      req.userId    = decoded.id;
+      req.userRole  = decoded.role;
+      req.userRoleId = decoded.roleId;
+      req.user      = decoded;
     }
   } catch (error) {
     logger.debug('Optional auth failed, continuing without authentication');
   }
-
   next();
 };

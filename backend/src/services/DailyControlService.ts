@@ -168,7 +168,7 @@ export class DailyControlService {
             return `
               <tr>
                 <td style="padding: 10px; border-bottom: 1px solid #ddd;">${emp.firstName} ${emp.lastName}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #ddd;">${emp.employeeNumber || 'N/A'}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">${emp.cedula || 'N/A'}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #ddd;">${emp.position || 'N/A'}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #ddd;">${emp.contractEndDate}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;"><strong>${daysRemaining}</strong> días</td>

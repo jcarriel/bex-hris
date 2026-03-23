@@ -1,0 +1,73 @@
+============================================================
+  BEX HRIS - Guia de instalacion y uso
+  URL del sistema: http://bex-hris.com.ec
+============================================================
+
+REQUISITOS PREVIOS
+------------------
+Antes de ejecutar la instalacion, asegurarse de tener instalado:
+
+1. Node.js (v18 o superior)
+   Descarga: https://nodejs.org/
+   Verificar: Abrir CMD y escribir: node --version
+
+2. Nginx para Windows
+   Descarga: https://nginx.org/en/download.html
+             (descargar la version "Stable version" -> zip para Windows)
+   Instalacion: Extraer el contenido del zip en C:\nginx
+                El resultado debe ser: C:\nginx\nginx.exe
+
+
+INSTALACION (solo la primera vez)
+----------------------------------
+1. Copiar la carpeta completa del proyecto en el equipo (ej: C:\bex-hris)
+
+2. Clic derecho sobre SETUP.BAT -> "Ejecutar como administrador"
+   Este script realiza automaticamente:
+   - Instala dependencias del proyecto
+   - Compila el frontend y backend
+   - Configura Nginx
+   - Agrega "bex-hris.com.ec" al archivo hosts del sistema
+
+
+USO DIARIO
+----------
+INICIAR el sistema:
+   Doble clic en START.BAT
+   (Abre automaticamente http://bex-hris.com.ec en el navegador)
+
+DETENER el sistema:
+   Doble clic en STOP.BAT
+
+ACTUALIZAR (cuando se entregue una nueva version):
+   Doble clic en UPDATE.BAT
+
+
+ESTRUCTURA DE ARCHIVOS
+----------------------
+deploy\
+  INSTRUCCIONES.txt  <- Este archivo
+  setup.bat          <- Instalacion inicial (ejecutar como Admin)
+  start.bat          <- Iniciar el sistema
+  stop.bat           <- Detener el sistema
+  update.bat         <- Actualizar a nueva version
+  nginx.conf         <- Configuracion de Nginx (referencia)
+
+backend\             <- Servidor de la API
+frontend\            <- Interfaz web
+
+
+NOTAS IMPORTANTES
+-----------------
+- El sistema funciona SOLO en esta computadora (uso local).
+- Los datos se guardan en: backend\data\database.sqlite
+- Hacer backup periodico del archivo database.sqlite.
+- Si el navegador muestra "No se puede acceder al sitio",
+  verificar que START.BAT fue ejecutado.
+- Puerto del backend: 4000 (interno, no necesita abrirse en el firewall)
+- Puerto HTTP: 80 (Nginx)
+
+
+SOPORTE
+-------
+Ante cualquier problema, contactar al desarrollador.

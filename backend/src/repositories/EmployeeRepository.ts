@@ -14,14 +14,13 @@ export class EmployeeRepository {
       ...employee,
       firstName: employee.firstName || '',
       lastName: employee.lastName || '',
-      email: employee.email || `emp-${uniqueSuffix}@temp.local`,
+      email: employee.email && employee.email.trim() !== '' ? employee.email.trim() : null,
       cedula: employee.cedula || `TEMP${uniqueSuffix}`,
       departmentId: employee.departmentId || '',
       positionId: employee.positionId || '',
       hireDate: employee.hireDate || now.split('T')[0],
-      contractType: employee.contractType || 'indefinite',
+      contratoTipo: employee.contratoTipo || '',
       baseSalary: employee.baseSalary || 0,
-      employeeNumber: employee.employeeNumber || `EMP-${uniqueSuffix}`,
       status: employee.status || 'active',
     };
 
@@ -39,8 +38,10 @@ export class EmployeeRepository {
     insertFields.push('lastName');
     insertValues.push(employeeData.lastName || '');
     
-    insertFields.push('email');
-    insertValues.push(employeeData.email || `${id}@temp.local`);
+    if (employeeData.email !== null && employeeData.email !== undefined) {
+      insertFields.push('email');
+      insertValues.push(employeeData.email);
+    }
     
     insertFields.push('cedula');
     insertValues.push(employeeData.cedula || `TEMP${id.substring(0, 8)}`);
@@ -54,20 +55,17 @@ export class EmployeeRepository {
     insertFields.push('hireDate');
     insertValues.push(employeeData.hireDate || now.split('T')[0]);
     
-    insertFields.push('contractType');
-    insertValues.push(employeeData.contractType || 'indefinite');
-    
+    insertFields.push('contratoTipo');
+    insertValues.push(employeeData.contratoTipo || '');
+
     insertFields.push('baseSalary');
     insertValues.push(employeeData.baseSalary || 0);
-    
-    insertFields.push('employeeNumber');
-    insertValues.push(employeeData.employeeNumber || `EMP-${id.substring(0, 8)}`);
-    
+
     insertFields.push('status');
     insertValues.push(employeeData.status || 'active');
 
     // Campos opcionales
-    const optionalFields = ['personalEmail', 'phone', 'personalPhone', 'dateOfBirth', 'gender', 'maritalStatus', 'nationality', 'address', 'currentContract', 'managerId'];
+    const optionalFields = ['phone', 'dateOfBirth', 'genero', 'estadoCivil', 'procedencia', 'direccion', 'contratoActual', 'contractEndDate', 'laborId', 'managerId', 'hijos', 'nivelAcademico', 'especialidad', 'afiliacion', 'estadoCivilId', 'contratoTipoId', 'contratoActualId', 'afiliacionId'];
     
     optionalFields.forEach(field => {
       const value = (employeeData as any)[field];
@@ -105,7 +103,26 @@ export class EmployeeRepository {
 
   async findById(id: string): Promise<Employee | null> {
     const db = getDatabase();
-    return db.get('SELECT * FROM employees WHERE id = ?', [id]) || null;
+    const row = await db.get(`
+      SELECT e.*,
+        cc.name AS departmentName,
+        c.name  AS positionName,
+        l.name  AS laborName,
+        COALESCE(ec.value, e.estadoCivil)    AS estadoCivil,
+        COALESCE(ct.value, e.contratoTipo)   AS contratoTipo,
+        COALESCE(ca.value, e.contratoActual) AS contratoActual,
+        COALESCE(af.value, e.afiliacion)     AS afiliacion
+      FROM employees e
+      LEFT JOIN centros_costo cc ON e.departmentId     = cc.id
+      LEFT JOIN cargos        c  ON e.positionId       = c.id
+      LEFT JOIN labores        l  ON e.laborId         = l.id
+      LEFT JOIN catalogs      ec ON e.estadoCivilId    = ec.id AND ec.type = 'estado_civil'
+      LEFT JOIN catalogs      ct ON e.contratoTipoId   = ct.id AND ct.type = 'tipo_contrato'
+      LEFT JOIN catalogs      ca ON e.contratoActualId = ca.id AND ca.type = 'contrato_actual'
+      LEFT JOIN catalogs      af ON e.afiliacionId     = af.id AND af.type = 'afiliacion'
+      WHERE e.id = ?
+    `, [id]);
+    return row || null;
   }
 
   async findByEmployeeNumber(employeeNumber: string): Promise<Employee | null> {
@@ -167,22 +184,48 @@ export class EmployeeRepository {
     let whereClause = '1=1';
     const values: unknown[] = [];
 
+    const search = filters?.search as string | undefined;
+
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
+        if (key === 'search') return;
         if (value !== undefined && value !== null) {
-          whereClause += ` AND ${key} = ?`;
+          whereClause += ` AND e.${key} = ?`;
           values.push(value);
         }
       });
     }
 
+    if (search) {
+      whereClause += ` AND (e.firstName LIKE ? OR e.lastName LIKE ? OR e.cedula LIKE ?)`;
+      const q = `%${search}%`;
+      values.push(q, q, q);
+    }
+
     const total = await db.get(
-      `SELECT COUNT(*) as count FROM employees WHERE ${whereClause}`,
+      `SELECT COUNT(*) as count FROM employees e WHERE ${whereClause}`,
       values
     );
 
     const data = await db.all(
-      `SELECT * FROM employees WHERE ${whereClause} ORDER BY firstName LIMIT ? OFFSET ?`,
+      `SELECT e.*,
+         cc.name AS departmentName,
+         c.name  AS positionName,
+         l.name  AS laborName,
+         COALESCE(ec.value, e.estadoCivil)    AS estadoCivil,
+         COALESCE(ct.value, e.contratoTipo)   AS contratoTipo,
+         COALESCE(ca.value, e.contratoActual) AS contratoActual,
+         COALESCE(af.value, e.afiliacion)     AS afiliacion
+       FROM employees e
+       LEFT JOIN centros_costo cc ON e.departmentId     = cc.id
+       LEFT JOIN cargos        c  ON e.positionId       = c.id
+       LEFT JOIN labores        l  ON e.laborId         = l.id
+       LEFT JOIN catalogs      ec ON e.estadoCivilId    = ec.id AND ec.type = 'estado_civil'
+       LEFT JOIN catalogs      ct ON e.contratoTipoId   = ct.id AND ct.type = 'tipo_contrato'
+       LEFT JOIN catalogs      ca ON e.contratoActualId = ca.id AND ca.type = 'contrato_actual'
+       LEFT JOIN catalogs      af ON e.afiliacionId     = af.id AND af.type = 'afiliacion'
+       WHERE ${whereClause}
+       ORDER BY e.firstName LIMIT ? OFFSET ?`,
       [...values, params.limit, params.offset]
     );
 
@@ -272,8 +315,7 @@ export class EmployeeRepository {
 
     return db.all(
       `SELECT * FROM employees 
-       WHERE contractType = 'fixed' 
-       AND contractEndDate IS NOT NULL 
+       WHERE contractEndDate IS NOT NULL 
        AND contractEndDate <= ? 
        AND status = 'active'
        ORDER BY contractEndDate`,

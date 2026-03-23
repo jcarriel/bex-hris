@@ -4,6 +4,21 @@ export interface User {
   username: string;
   password: string;
   email: string;
+  nombre?: string;
+  role?: string;
+  roleId?: string;
+  status?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Role Types
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string; // stored as JSON string in DB
+  isSystem: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -11,28 +26,25 @@ export interface User {
 // Employee Types
 export interface Employee {
   id: string;
-  employeeNumber: string;
   firstName: string;
   lastName: string;
-  email: string;
-  personalEmail: string;
-  phone: string;
-  personalPhone: string;
+  email?: string;
+  phone?: string;
   dateOfBirth: string;
-  gender: 'M' | 'F' | 'O';
-  maritalStatus: 'single' | 'married' | 'divorced' | 'widowed';
-  nationality: string;
+  genero: 'M' | 'F' | 'O';
+  estadoCivil: string;
+  procedencia: string;
   cedula: string;
   passport?: string;
-  address: string;
+  direccion: string;
   profilePhoto?: string;
   departmentId: string;
   positionId: string;
   laborId?: string;
   managerId?: string;
   hireDate: string;
-  contractType: 'indefinite' | 'fixed' | 'temporary' | 'intern';
-  currentContract?: string;
+  contratoTipo: string;
+  contratoActual?: string;
   contractEndDate?: string;
   status: 'active' | 'inactive' | 'on_leave' | 'terminated';
   terminationDate?: string;
@@ -41,6 +53,14 @@ export interface Employee {
   bankAccount?: string;
   bankName?: string;
   accountType?: string;
+  hijos?: number;
+  nivelAcademico?: string;
+  especialidad?: string;
+  afiliacion?: string;
+  estadoCivilId?: string;
+  contratoTipoId?: string;
+  contratoActualId?: string;
+  afiliacionId?: string;
   createdAt: string;
   updatedAt: string;
 }

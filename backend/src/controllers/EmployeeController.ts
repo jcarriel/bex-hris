@@ -8,10 +8,10 @@ export class EmployeeController {
     try {
       const employeeData = req.body;
 
-      if (!employeeData.firstName || !employeeData.lastName || !employeeData.email || !employeeData.cedula || !employeeData.departmentId || !employeeData.positionId) {
+      if (!employeeData.firstName || !employeeData.lastName || !employeeData.cedula || !employeeData.departmentId || !employeeData.positionId) {
         res.status(400).json({
           success: false,
-          message: 'First name, last name, email, cedula, department ID, and position ID are required',
+          message: 'First name, last name, cedula, department ID, and position ID are required',
         });
         return;
       }
@@ -67,7 +67,9 @@ export class EmployeeController {
 
       const filters: Record<string, unknown> = {};
       if (req.query.departmentId) filters.departmentId = req.query.departmentId;
+      if (req.query.positionId) filters.positionId = req.query.positionId;
       if (req.query.status) filters.status = req.query.status;
+      if (req.query.search) filters.search = req.query.search;
 
       const result = await EmployeeService.getEmployees(
         { page, limit, offset },

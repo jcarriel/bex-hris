@@ -9,13 +9,8 @@ export class EmployeeService {
     employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<Employee> {
     try {
-      // Generate employee number if not provided
-      if (!employeeData.employeeNumber) {
-        employeeData.employeeNumber = `EMP-${Date.now()}`;
-      }
-
       const employee = await EmployeeRepository.create(employeeData);
-      logger.info(`Employee created: ${employee.employeeNumber}`);
+      logger.info(`Employee created: ${employee.cedula}`);
 
       // Send notification
       await NotificationService.sendViaChannel('app', {

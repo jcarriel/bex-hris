@@ -1,37 +1,29 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from './stores/authStore';
-import { useThemeStore } from './stores/themeStore';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import { useEffect } from 'react';
+import { useEffect } from 'react'
+import { RouterProvider } from 'react-router-dom'
+import { router } from '@/router'
+import { useUiStore } from '@/store/uiStore'
 
-function App() {
-  const isAuthenticated = useAuthStore((state: any) => state.isAuthenticated);
-  const theme = useThemeStore((state) => state.theme);
+export default function App() {
+  const theme = useUiStore((s) => s.theme)
 
-  // Apply theme to document
   useEffect(() => {
-    const htmlElement = document.documentElement;
+    // Dark mode: add .dark class; Light mode: remove it
     if (theme === 'dark') {
-      htmlElement.classList.add('dark');
+      document.body.classList.add('dark')
+      document.body.classList.remove('light')
     } else {
-      htmlElement.classList.remove('dark');
+      document.body.classList.remove('dark')
+      document.body.classList.add('light')
     }
-  }, [theme]);
+  }, [theme])
 
-  return (
-    <div className={theme === 'dark' ? 'dark' : ''}>
-      <div className={theme === 'dark' ? 'bg-gray-900 text-white min-h-screen' : 'bg-white text-gray-900 min-h-screen'}>
-        <Router>
-          <Routes>
-            <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" />} />
-            <Route path="/dashboard" element={isAuthenticated ? <DashboardPage /> : <Navigate to="/login" />} />
-            <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} />} />
-          </Routes>
-        </Router>
-      </div>
-    </div>
-  );
+  // Apply dark class on mount immediately (avoid flash)
+  useEffect(() => {
+    const stored = useUiStore.getState().theme
+    if (stored === 'dark') {
+      document.body.classList.add('dark')
+    }
+  }, [])
+
+  return <RouterProvider router={router} />
 }
-
-export default App;

@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import UserRepository from '@repositories/UserRepository';
+import RoleService from '@services/RoleService';
 import logger from '@utils/logger';
 
 export class AuthService {
@@ -35,44 +36,51 @@ export class AuthService {
     }
   }
 
-  async login(username: string, password: string): Promise<{ token: string; user: { id: string; username: string; email: string } }> {
+  async login(username: string, password: string): Promise<{
+    token: string;
+    user: { id: string; username: string; nombre: string; email: string; role: string; roleId?: string; permissions: string[] };
+  }> {
     try {
       const user = await UserRepository.findByUsername(username);
 
-      if (!user) {
-        throw new Error('Invalid credentials');
-      }
+      if (!user) throw new Error('Invalid credentials');
 
-      // Try to compare with bcrypt first, then fallback to plain text comparison for legacy passwords
+      // Block inactive users
+      if ((user as any).status === 'inactive') throw new Error('Cuenta desactivada. Contacta al administrador.');
+
       let isPasswordValid = false;
       try {
         isPasswordValid = await bcrypt.compare(password, user.password);
       } catch (e) {
-        // If bcrypt fails, it might be a plain text password, compare directly
         isPasswordValid = password === user.password;
       }
 
-      if (!isPasswordValid) {
-        throw new Error('Invalid credentials');
-      }
+      if (!isPasswordValid) throw new Error('Invalid credentials');
 
-      // If password is plain text, hash it for security
       if (password === user.password) {
         const hashedPassword = await bcrypt.hash(password, 10);
         await UserRepository.update(user.id, { password: hashedPassword });
         logger.info(`Password upgraded to bcrypt for user: ${username}`);
       }
 
+      // Resolve permissions
+      const userRole = (user as any).role || 'user';
+      const userRoleId = (user as any).roleId;
+      let permissions: string[];
+
+      if (userRole === 'admin') {
+        permissions = ['*'];
+      } else if (userRoleId) {
+        const roleData = await RoleService.findById(userRoleId);
+        permissions = roleData ? roleData.permissions : ['dashboard'];
+      } else {
+        permissions = ['dashboard'];
+      }
+
       const token = jwt.sign(
-        {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-        },
+        { id: user.id, username: user.username, email: user.email, role: userRole, roleId: userRoleId },
         process.env.JWT_SECRET || 'secret',
-        {
-          expiresIn: (process.env.JWT_EXPIRATION || '7d') as string | number,
-        } as any
+        { expiresIn: (process.env.JWT_EXPIRATION || '7d') as string | number } as any
       );
 
       logger.info(`User logged in: ${username}`);
@@ -82,7 +90,11 @@ export class AuthService {
         user: {
           id: user.id,
           username: user.username,
+          nombre: (user as any).nombre || user.username,
           email: user.email,
+          role: userRole,
+          roleId: userRoleId,
+          permissions,
         },
       };
     } catch (error) {

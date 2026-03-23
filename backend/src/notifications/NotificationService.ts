@@ -1,7 +1,4 @@
-import { EmailProvider } from './providers/EmailProvider';
 import { AppNotificationProvider } from './providers/AppNotificationProvider';
-import { WhatsAppProvider } from './providers/WhatsAppProvider';
-import { TelegramProvider } from './providers/TelegramProvider';
 import { INotificationProvider, NotificationPayload } from './interfaces/INotificationProvider';
 import logger from '@utils/logger';
 
@@ -14,10 +11,7 @@ export class NotificationService {
   }
 
   private initializeProviders(): void {
-    this.providers.set('email', new EmailProvider());
     this.providers.set('app', new AppNotificationProvider());
-    this.providers.set('whatsapp', new WhatsAppProvider());
-    this.providers.set('telegram', new TelegramProvider());
   }
 
   /**
@@ -67,11 +61,9 @@ export class NotificationService {
    * Send notification through all configured channels
    */
   async sendViaAllChannels(payload: NotificationPayload): Promise<Record<string, boolean>> {
-    const channels: Array<'email' | 'app' | 'whatsapp' | 'telegram'> = [
+    const channels: Array<'email' | 'app'> = [
       'email',
-      'app',
-      'whatsapp',
-      'telegram',
+      'app'
     ];
     return this.sendViaMultipleChannels(channels, payload);
   }

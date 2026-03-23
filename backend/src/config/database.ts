@@ -2,6 +2,8 @@ import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import path from 'path';
 import fs from 'fs';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 
 let db: Database | null = null;
 
@@ -47,12 +49,48 @@ export function getDatabase(): Database {
 
 async function runMigrations(db: Database): Promise<void> {
   try {
-    // Agregar columna currentContract a tabla employees si no existe
+    // Ensure catalogs table exists
     try {
-      await db.exec(`ALTER TABLE employees ADD COLUMN currentContract TEXT;`);
-    } catch (error) {
-      // Columna ya existe, ignorar error
-      console.log('Column currentContract already exists or migration skipped');
+      await db.exec(`CREATE TABLE IF NOT EXISTS catalogs (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        value TEXT NOT NULL,
+        description TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        UNIQUE(type, value)
+      )`);
+      console.log('Catalogs table ensured');
+    } catch (error: any) {
+      console.error('Error ensuring catalogs table:', error);
+    }
+
+    // Ensure roles table exists and seed default roles
+    try {
+      await db.exec(`CREATE TABLE IF NOT EXISTS roles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        permissions TEXT NOT NULL DEFAULT '[]',
+        isSystem INTEGER DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )`);
+    } catch (error: any) {
+      console.error('Error ensuring roles:', error);
+    }
+
+    // Add nombre, roleId, status columns to users if not exists
+    for (const colDef of ['nombre TEXT', 'roleId TEXT', "status TEXT DEFAULT 'active'"]) {
+      const colName = colDef.split(' ')[0];
+      try {
+        await db.exec(`ALTER TABLE users ADD COLUMN ${colDef};`);
+        console.log(`Added ${colName} column to users table`);
+      } catch (error: any) {
+        if (!error.message?.includes('duplicate column')) {
+          console.error(`Error adding ${colName} to users:`, error);
+        }
+      }
     }
 
     // Agregar columna laborId a tabla employees si no existe
@@ -64,6 +102,19 @@ async function runMigrations(db: Database): Promise<void> {
         console.log('laborId column already exists');
       } else {
         console.error('Error adding laborId column:', error);
+      }
+    }
+
+    // Agregar columnas hijos, nivelAcademico, especialidad, afiliacion, estadoCivilId, contratoTipoId, contratoActualId si no existen
+    for (const colDef of ['hijos INTEGER', 'nivelAcademico TEXT', 'especialidad TEXT', 'afiliacion TEXT', 'estadoCivilId TEXT', 'contratoTipoId TEXT', 'contratoActualId TEXT', 'afiliacionId TEXT']) {
+      const colName = colDef.split(' ')[0];
+      try {
+        await db.exec(`ALTER TABLE employees ADD COLUMN ${colDef};`);
+        console.log(`Added ${colName} column to employees table`);
+      } catch (error: any) {
+        if (!error.message?.includes('duplicate column')) {
+          console.error(`Error adding ${colName} column:`, error);
+        }
       }
     }
 
@@ -224,18 +275,6 @@ async function runMigrations(db: Database): Promise<void> {
       }
     }
 
-    // Add completionNotes column to tasks table if it doesn't exist
-    try {
-      await db.exec(`ALTER TABLE tasks ADD COLUMN completionNotes TEXT`);
-      console.log('Added completionNotes column to tasks table');
-    } catch (error: any) {
-      if (error.message && error.message.includes('duplicate column')) {
-        console.log('completionNotes column already exists');
-      } else {
-        console.error('Error adding completionNotes column:', error);
-      }
-    }
-
     // Add completedAt column to tasks table if it doesn't exist
     try {
       await db.exec(`ALTER TABLE tasks ADD COLUMN completedAt TEXT`);
@@ -272,6 +311,61 @@ async function runMigrations(db: Database): Promise<void> {
       }
     }
 
+    // Seed default admin user if no users exist
+    try {
+      const userCount = await db.get<{ count: number }>(`SELECT COUNT(*) as count FROM users`);
+      if (userCount && userCount.count === 0) {
+        const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'Admin123!';
+        const hashed = await bcrypt.hash(adminPassword, 10);
+        const now = new Date().toISOString();
+        await db.run(
+          `INSERT INTO users (id, username, password, email, nombre, role, roleId, status, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [uuidv4(), 'admin', hashed, 'admin@bexhris.com', 'Administrador', 'admin', 'role-admin', 'active', now, now]
+        );
+        console.log(`Default admin user created — usuario: admin, contraseña: ${adminPassword}`);
+      }
+    } catch (error) {
+      console.error('Error seeding admin user:', error);
+    }
+
+    // Create events table
+    try {
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS events (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          eventDate TEXT NOT NULL,
+          employeeId TEXT,
+          daysNotice INTEGER DEFAULT 7,
+          createdBy TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          FOREIGN KEY (employeeId) REFERENCES employees(id) ON DELETE SET NULL
+        )
+      `);
+      console.log('Events table ready');
+    } catch (error) {
+      console.error('Error ensuring events table:', error);
+    }
+
+    // Create event_type_configs table
+    try {
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS event_type_configs (
+          type TEXT PRIMARY KEY,
+          daysNotice INTEGER NOT NULL DEFAULT 7,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          updatedAt TEXT NOT NULL
+        )
+      `);
+      console.log('Event type configs table ready');
+    } catch (error) {
+      console.error('Error ensuring event_type_configs table:', error);
+    }
+
     console.log('Migrations completed successfully');
   } catch (error) {
     console.error('Error running migrations:', error);
@@ -305,6 +399,10 @@ async function createIndexes(db: Database): Promise<void> {
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_leaves_status ON leaves(status)`);
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_leaves_startDate ON leaves(startDate)`);
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_leaves_endDate ON leaves(endDate)`);
+
+    // Social Cases indexes
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_social_cases_employeeId ON social_cases(employeeId)`);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_social_cases_status ON social_cases(status)`);
 
     // Payroll indexes
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_payroll_employeeId ON payroll(employeeId)`);
@@ -345,16 +443,32 @@ async function createTables(db: Database): Promise<void> {
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
+      nombre TEXT,
       role TEXT DEFAULT 'user',
+      roleId TEXT,
       status TEXT DEFAULT 'active',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (roleId) REFERENCES roles(id)
+    )
+  `);
+
+  // Roles table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      permissions TEXT NOT NULL DEFAULT '[]',
+      isSystem INTEGER DEFAULT 0,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     )
   `);
 
-  // Departments table
+  // Centros de Costo table (formerly departments)
   await db.exec(`
-    CREATE TABLE IF NOT EXISTS departments (
+    CREATE TABLE IF NOT EXISTS centros_costo (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
@@ -378,14 +492,14 @@ async function createTables(db: Database): Promise<void> {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       UNIQUE(departmentId, positionId),
-      FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE CASCADE,
-      FOREIGN KEY (positionId) REFERENCES positions(id) ON DELETE CASCADE
+      FOREIGN KEY (departmentId) REFERENCES centros_costo(id) ON DELETE CASCADE,
+      FOREIGN KEY (positionId) REFERENCES cargos(id) ON DELETE CASCADE
     )
   `);
 
-  // Positions table
+  // Cargos table (formerly positions)
   await db.exec(`
-    CREATE TABLE IF NOT EXISTS positions (
+    CREATE TABLE IF NOT EXISTS cargos (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
@@ -394,20 +508,20 @@ async function createTables(db: Database): Promise<void> {
       salaryMax REAL NOT NULL,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
-      FOREIGN KEY (departmentId) REFERENCES departments(id)
+      FOREIGN KEY (departmentId) REFERENCES centros_costo(id)
     )
   `);
 
-  // Labors table
+  // Labores table (formerly labors)
   await db.exec(`
-    CREATE TABLE IF NOT EXISTS labors (
+    CREATE TABLE IF NOT EXISTS labores (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
       positionId TEXT NOT NULL,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
-      FOREIGN KEY (positionId) REFERENCES positions(id)
+      FOREIGN KEY (positionId) REFERENCES cargos(id)
     )
   `);
 
@@ -415,27 +529,24 @@ async function createTables(db: Database): Promise<void> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS employees (
       id TEXT PRIMARY KEY,
-      employeeNumber TEXT UNIQUE NOT NULL,
       firstName TEXT NOT NULL,
       lastName TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      personalEmail TEXT,
+      email TEXT UNIQUE,
       phone TEXT,
-      personalPhone TEXT,
       dateOfBirth TEXT,
-      gender TEXT,
-      maritalStatus TEXT,
-      nationality TEXT,
+      genero TEXT,
+      estadoCivil TEXT,
+      procedencia TEXT,
       cedula TEXT UNIQUE,
       passport TEXT,
-      address TEXT,
+      direccion TEXT,
       profilePhoto TEXT,
       departmentId TEXT NOT NULL,
       positionId TEXT NOT NULL,
       managerId TEXT,
       hireDate TEXT NOT NULL,
-      contractType TEXT NOT NULL,
-      currentContract TEXT,
+      contratoTipo TEXT NOT NULL,
+      contratoActual TEXT,
       contractEndDate TEXT,
       status TEXT NOT NULL,
       terminationDate TEXT,
@@ -444,11 +555,32 @@ async function createTables(db: Database): Promise<void> {
       bankAccount TEXT,
       bankName TEXT,
       accountType TEXT,
+      hijos INTEGER,
+      nivelAcademico TEXT,
+      especialidad TEXT,
+      afiliacion TEXT,
+      estadoCivilId TEXT,
+      contratoTipoId TEXT,
+      contratoActualId TEXT,
+      afiliacionId TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
-      FOREIGN KEY (departmentId) REFERENCES departments(id),
-      FOREIGN KEY (positionId) REFERENCES positions(id),
+      FOREIGN KEY (departmentId) REFERENCES centros_costo(id),
+      FOREIGN KEY (positionId) REFERENCES cargos(id),
       FOREIGN KEY (managerId) REFERENCES employees(id)
+    )
+  `);
+
+  // Catalogs table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS catalogs (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      value TEXT NOT NULL,
+      description TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      UNIQUE(type, value)
     )
   `);
 
@@ -556,6 +688,26 @@ async function createTables(db: Database): Promise<void> {
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (employeeId) REFERENCES employees(id),
       FOREIGN KEY (approvedBy) REFERENCES users(id)
+    )
+  `);
+
+  // Social Cases table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS social_cases (
+      id TEXT PRIMARY KEY,
+      employeeId TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      resolution TEXT,
+      resolvedDate TEXT,
+      resolvedBy TEXT,
+      createdBy TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (employeeId) REFERENCES employees(id)
     )
   `);
 
@@ -671,23 +823,13 @@ async function createTables(db: Database): Promise<void> {
     // Column already exists, ignore error
   }
 
-  // Document Categories table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS document_categories (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      description TEXT,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    )
-  `);
-
   // Tasks table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT,
+      completionNotes TEXT,
       dueDate TEXT NOT NULL,
       status TEXT DEFAULT 'pending',
       priority TEXT DEFAULT 'medium',
@@ -716,6 +858,38 @@ async function createTables(db: Database): Promise<void> {
     )
   `);
 
+  // Task Comments table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS task_comments (
+      id TEXT PRIMARY KEY,
+      taskId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      userName TEXT,
+      comment TEXT NOT NULL,
+      action TEXT,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  `);
+
+  // Workforce Reports table (Fuerza Laboral)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS workforce_reports (
+      id TEXT PRIMARY KEY,
+      week INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      department TEXT NOT NULL DEFAULT 'BIOEXPORTVAL',
+      cajas_realizadas REAL,
+      dias_proceso INTEGER,
+      data TEXT NOT NULL DEFAULT '{}',
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )
+  `);
+
   // Audit Log table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -729,25 +903,6 @@ async function createTables(db: Database): Promise<void> {
       createdAt TEXT NOT NULL,
       FOREIGN KEY (userId) REFERENCES users(id)
     )
-  `);
-
-  // Insert default document categories if they don't exist
-  await db.run(`
-    INSERT OR IGNORE INTO document_categories (id, name, description, createdAt, updatedAt)
-    VALUES 
-      ('1', 'Contrato', 'Contratos laborales', datetime('now'), datetime('now')),
-      ('2', 'Certificado', 'Certificados profesionales', datetime('now'), datetime('now')),
-      ('3', 'IESS', 'Documentos del IESS', datetime('now'), datetime('now')),
-      ('4', 'Memorandum', 'Memorandums', datetime('now'), datetime('now')),
-      ('5', 'Identificacion', 'Documentos de identificación', datetime('now'), datetime('now')),
-      ('6', 'Otro', 'Otros documentos', datetime('now'), datetime('now'))
-  `);
-
-  // Insert system user for document uploads if it doesn't exist
-  await db.run(`
-    INSERT OR IGNORE INTO users (id, username, email, password, role, status, createdAt, updatedAt)
-    VALUES 
-      ('system-upload', 'system', 'system@hris.local', '', 'admin', 'active', datetime('now'), datetime('now'))
   `);
 
   console.log('Database tables created successfully');

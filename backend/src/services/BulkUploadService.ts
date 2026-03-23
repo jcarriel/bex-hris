@@ -1,7 +1,10 @@
+import * as XLSX from 'xlsx';
+import { v4 as uuidv4 } from 'uuid';
 import EmployeeService from './EmployeeService';
 import PositionService from './PositionService';
 import DepartmentService from './DepartmentService';
 import LaborService from './LaborService';
+import { getDatabase } from '@config/database';
 import logger from '@utils/logger';
 import type { Employee } from '../types';
 
@@ -21,44 +24,26 @@ export class BulkUploadService {
 
       logger.info(`Processing employee file: ${fileName}, Status: ${status}`);
 
-      // Parse CSV
-      const csvText = fileBuffer.toString('utf-8');
-      const lines = csvText.split('\n').filter(line => line.trim());
-      
-      if (lines.length < 2) {
+      // Parse XLSX
+      const wb = XLSX.read(fileBuffer, { type: 'buffer' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
+
+      if (rows.length === 0) {
         throw new Error('El archivo está vacío o no tiene datos');
       }
 
-      const headers = lines[0].split(',').map(h => h.trim());
-      
-      logger.info(`CSV Headers detected: ${JSON.stringify(headers)}`);
-      
-      // Mapeo de columnas esperadas
-      const columnMap: Record<string, number> = {};
-      const expectedColumns = [
-        'Apellidos', 'Nombres', 'Cedula', 'TipoContrato', 'ContratoActual',
-        'Cargo', 'Labor', 'CentroDeCosto', 'Sueldo', 'FechaNacimiento',
-        'Edad', 'Genero', 'FechaIngreso', 'Mes', 'Año', 'EstadoCivil',
-        'Procedencia', 'Direccion', 'FechaTerminacionContrato', 'Email', 'Telefono'
-      ];
-
-      headers.forEach((header, index) => {
-        columnMap[header] = index;
-      });
-      
-      logger.info(`Column map: ${JSON.stringify(columnMap)}`);
+      logger.info(`XLSX Headers detected: ${JSON.stringify(Object.keys(rows[0]))}`);
 
       // Procesar cada fila
-      for (let rowIndex = 1; rowIndex < lines.length; rowIndex++) {
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
         try {
-          const values = lines[rowIndex].split(',').map(v => v.trim());
-          
-          if (values.length < 3 || !values[0]) continue; // Skip empty rows
+          const row = rows[rowIndex];
 
-          const lastName = this.toUpperCase(values[columnMap['Apellidos']] || '');
-          const firstName = this.toUpperCase(values[columnMap['Nombres']] || '');
-          let cedula = this.toUpperCase(values[columnMap['Cedula']] || '');
-          
+          const lastName = this.toUpperCase(String(row['Apellidos'] ?? ''));
+          const firstName = this.toUpperCase(String(row['Nombres'] ?? ''));
+          let cedula = String(row['Cedula'] ?? '').trim();
+
           // Normalizar cédula: si tiene 9 dígitos, agregar 0 al inicio
           const cedulaDigits = cedula.replace(/\D/g, '');
           if (cedulaDigits.length === 9) {
@@ -66,23 +51,28 @@ export class BulkUploadService {
           } else if (cedulaDigits.length === 10) {
             cedula = cedulaDigits;
           }
-          
-          const contractType = this.toUpperCase(values[columnMap['TipoContrato']] || 'indefinite');
-          const currentContract = this.toUpperCase(values[columnMap['ContratoActual']] || '');
-          const positionName = this.toUpperCase(values[columnMap['Cargo']] || '');
-          const laborName = this.toUpperCase(values[columnMap['Labor']] || '');
-          const departmentName = this.toUpperCase(values[columnMap['CentroDeCosto']] || '');
-          const salaryStr = values[columnMap['Sueldo']] || '0';
-          const baseSalary = parseFloat(salaryStr.replace(/[$,]/g, '')) || 0;
-          const dateOfBirth = values[columnMap['FechaNacimiento']] || '';
-          const gender = (values[columnMap['Genero']] || 'M').toUpperCase();
-          const hireDate = values[columnMap['FechaIngreso']] || new Date().toISOString().split('T')[0];
-          const maritalStatus = this.toUpperCase(values[columnMap['EstadoCivil']] || 'single');
-          const address = this.toUpperCase(values[columnMap['Procedencia']] || '');
-          const contractEndDate = values[columnMap['FechaTerminacionContrato']] || '';
-          const emailFromCsv = values[columnMap['Email']]?.trim();
-          const email = emailFromCsv && emailFromCsv.length > 0 ? emailFromCsv.toLowerCase() : `emp${cedula}@temp.local`;
-          const phone = values[columnMap['Telefono']] || '';
+
+          if (!lastName || !firstName || !cedula) continue; // skip empty rows
+
+          const contratoTipo = this.toUpperCase(String(row['TipoContrato'] ?? ''));
+          const contratoActual = this.toUpperCase(String(row['ContratoActual'] ?? ''));
+          const positionName = this.toUpperCase(String(row['Cargo'] ?? ''));
+          const laborName = this.toUpperCase(String(row['Labor'] ?? ''));
+          const departmentName = this.toUpperCase(String(row['CentroDeCosto'] ?? ''));
+          const baseSalary = typeof row['Sueldo'] === 'number' ? row['Sueldo'] : parseFloat(String(row['Sueldo'] ?? '0').replace(/[$,\s]/g, '')) || 0;
+          const dateOfBirth = String(row['FechaNacimiento'] ?? '');
+          const genero = String(row['Genero'] ?? 'M').toUpperCase();
+          const hireDate = String(row['FechaIngreso'] ?? '');
+          const estadoCivil = this.toUpperCase(String(row['EstadoCivil'] ?? ''));
+          const procedencia = this.toUpperCase(String(row['Procedencia'] ?? ''));
+          const direccion = this.toUpperCase(String(row['Direccion'] ?? ''));
+          const contractEndDate = String(row['FechaTerminacionContrato'] ?? '');
+          const emailFromXlsx = String(row['Email'] ?? '').trim();
+          const email = emailFromXlsx.length > 0 ? emailFromXlsx.toLowerCase() : undefined;
+          const phone = String(row['Telefono'] ?? '');
+          const hijos = parseInt(String(row['Hijos'] ?? '0')) || undefined;
+          const nivelAcademico = String(row['NivelAcademico'] ?? '').trim() || undefined;
+          const especialidad = String(row['Especialidad'] ?? '').trim() || undefined;
 
           // Validar datos requeridos
           if (!lastName || !firstName || !cedula) {
@@ -115,39 +105,55 @@ export class BulkUploadService {
           // Obtener o crear labor
           let labor = null;
           if (laborName) {
-            const labors = LaborService.getLabors();
+            const labors = await LaborService.getLabors();
             labor = labors.find((l: any) => l.name.toUpperCase() === laborName);
             if (!labor) {
-              labor = LaborService.createLabor(laborName, '', position.id);
+              labor = await LaborService.createLabor(laborName, '', position.id);
             }
           }
 
+          // Upsert catalog items and get IDs
+          const afiliacion = this.toUpperCase(String(row['Afiliacion'] ?? ''));
+          let estadoCivilId: string | undefined;
+          let contratoTipoId: string | undefined;
+          let contratoActualId: string | undefined;
+          let afiliacionId: string | undefined;
+          if (estadoCivil) estadoCivilId = await this.upsertCatalog('estado_civil', estadoCivil);
+          if (contratoTipo) contratoTipoId = await this.upsertCatalog('tipo_contrato', contratoTipo);
+          if (contratoActual) contratoActualId = await this.upsertCatalog('contrato_actual', contratoActual);
+          if (afiliacion) afiliacionId = await this.upsertCatalog('afiliacion', afiliacion);
+
           // Preparar datos del empleado
-          const genderValue: 'M' | 'F' | 'O' = gender === 'F' ? 'F' : gender === 'M' ? 'M' : 'O';
+          const genderValue: 'M' | 'F' | 'O' = genero === 'F' ? 'F' : genero === 'M' ? 'M' : 'O';
           const employeeStatus: 'active' | 'inactive' = status === 'inactive' ? 'inactive' : 'active';
           const employeeData = {
             firstName,
             lastName,
             email,
-            personalEmail: email,
             cedula,
-            phone: phone || '',
-            personalPhone: phone || '',
+            phone: phone || undefined,
             departmentId: department.id,
             positionId: position.id,
             laborId: labor?.id,
             hireDate: this.formatDate(hireDate),
             baseSalary,
             dateOfBirth: this.formatDate(dateOfBirth),
-            gender: genderValue,
-            maritalStatus: this.mapMaritalStatus(maritalStatus),
-            nationality: address,
-            address,
-            contractType: this.mapContractType(contractType),
-            currentContract: currentContract || '',
+            genero: genderValue,
+            estadoCivil,
+            estadoCivilId,
+            procedencia,
+            direccion,
+            contratoTipo,
+            contratoTipoId,
+            contratoActual,
+            contratoActualId,
+            afiliacion,
+            afiliacionId,
             contractEndDate: contractEndDate ? this.formatDate(contractEndDate) : undefined,
-            employeeNumber: `EMP-${cedula}`,
             status: employeeStatus,
+            hijos,
+            nivelAcademico,
+            especialidad,
           };
 
           try {
@@ -196,6 +202,18 @@ export class BulkUploadService {
       logger.error('Error processing employee file', error);
       throw error;
     }
+  }
+
+  private async upsertCatalog(type: string, value: string): Promise<string> {
+    const db = getDatabase();
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    await db.run(
+      `INSERT OR IGNORE INTO catalogs (id, type, value, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)`,
+      [id, type, value, now, now]
+    );
+    const row = await db.get('SELECT id FROM catalogs WHERE type = ? AND value = ?', [type, value]);
+    return row.id;
   }
 
   private toUpperCase(data: any): any {
@@ -263,13 +281,13 @@ export class BulkUploadService {
     return 'indefinite';
   }
 
-  private mapMaritalStatus(statusStr: string): 'single' | 'married' | 'divorced' | 'widowed' {
+  private mapMaritalStatus(statusStr: string): 'SOLTERO' | 'CASADO' | 'DIVORCIADO' | 'VIUDO' {
     const upper = statusStr.toUpperCase();
-    if (upper.includes('SOLTERO')) return 'single';
-    if (upper.includes('CASADO')) return 'married';
-    if (upper.includes('DIVORCIADO')) return 'divorced';
-    if (upper.includes('VIUDO')) return 'widowed';
-    return 'single';
+    if (upper.includes('SOLTERO')) return 'SOLTERO';
+    if (upper.includes('CASADO')) return 'CASADO';
+    if (upper.includes('DIVORCIADO')) return 'DIVORCIADO';
+    if (upper.includes('VIUDO')) return 'VIUDO';
+    return 'SOLTERO';
   }
 
   async processRolesFile(fileBuffer: Buffer, fileName: string): Promise<{
