@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import EventService from './EventService';
 import EventTypeConfigService from './EventTypeConfigService';
 import UserRepository from '@repositories/UserRepository';
+import NotificationRepository from '@repositories/NotificationRepository';
 import EmailService from './EmailService';
 import logger from '@utils/logger';
 
@@ -155,10 +156,32 @@ export class EventDigestScheduler {
       }
 
       const users = await UserRepository.getAll();
-      const targets = (users as any[]).filter((u) => u.email && u.status !== 'inactive');
+      const targets = (users as any[]).filter((u) => u.status !== 'inactive');
 
+      // ── In-app notifications (only for daysAway 0 or 1 to avoid noise) ──
+      const urgent = due.filter((e) => (e.daysAway ?? 99) <= 1);
+      if (urgent.length > 0) {
+        for (const user of targets) {
+          for (const event of urgent) {
+            const meta = TYPE_META[event.type] || TYPE_META.other;
+            const when = event.daysAway === 0 ? 'HOY' : 'mañana';
+            try {
+              await NotificationRepository.create({
+                userId: user.id,
+                type: event.type,
+                title: `${meta.icon} ${event.title}`,
+                message: `${event.description || meta.label} — ${when}`,
+              });
+            } catch { /* skip individual failures */ }
+          }
+        }
+        logger.info(`In-app notifications created: ${urgent.length} events × ${targets.length} users`);
+      }
+
+      // ── Email digest ──
+      const emailTargets = targets.filter((u) => u.email);
       let sent = 0;
-      for (const user of targets) {
+      for (const user of emailTargets) {
         const html = buildDigestHtml(due, user.nombre || user.username);
         if (!html) continue;
         const ok = await EmailService.send({
@@ -169,7 +192,7 @@ export class EventDigestScheduler {
         if (ok) sent++;
       }
 
-      logger.info(`Event digest sent to ${sent}/${targets.length} users (${due.length} events)`);
+      logger.info(`Event digest sent to ${sent}/${emailTargets.length} users (${due.length} events)`);
       return sent;
     } catch (error) {
       logger.error('Error sending event digest', error);

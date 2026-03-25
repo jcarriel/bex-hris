@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react'
 import { departmentsService } from '@/services/departments.service'
 import { positionsService } from '@/services/positions.service'
 import { catalogService } from '@/services/catalog.service'
+import { api } from '@/services/api'
 import type { Empleado, EmpleadoFormData } from '@/types/empleado.types'
 import { cn } from '@/lib/utils'
 
@@ -132,6 +133,30 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
   })
 
   const selectedDeptId = watch('departmentId')
+  const watchedCedula = watch('cedula')
+
+  const [cedulaWarning, setCedulaWarning] = useState<string | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const checkCedulaDuplicate = useCallback(async (cedula: string, currentId?: string) => {
+    if (!cedula || cedula.length < 6) { setCedulaWarning(null); return }
+    try {
+      const res = await api.get('/employees', { params: { search: cedula } })
+      const employees = res.data?.data?.employees ?? res.data?.data ?? []
+      const duplicate = employees.find((e: any) => e.cedula === cedula && e.id !== currentId)
+      setCedulaWarning(duplicate ? `Ya existe el empleado: ${duplicate.firstName} ${duplicate.lastName}` : null)
+    } catch { setCedulaWarning(null) }
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      checkCedulaDuplicate(watchedCedula, defaultValues?.id)
+    }, 600)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [watchedCedula, defaultValues?.id, checkCedulaDuplicate])
 
   const { data: departments = [], isLoading: loadingDepts } = useQuery({
     queryKey: ['departments'],
@@ -177,6 +202,10 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
   }, [positions]) // eslint-disable-line
 
   const handleFormSubmit = async (values: FormValues) => {
+    if (cedulaWarning) {
+      const proceed = window.confirm(`${cedulaWarning}\n\n¿Desea continuar de todas formas?`)
+      if (!proceed) return
+    }
     const data: EmpleadoFormData = {
       ...values,
       email: values.email || undefined,
@@ -202,6 +231,9 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
 
           <Field label="Cédula *" error={errors.cedula?.message}>
             <input {...register('cedula')} placeholder="001-0000000-0" className={inputClass(!!errors.cedula)} />
+            {cedulaWarning && (
+              <p className="text-xs text-red-400 mt-1">⚠ {cedulaWarning}</p>
+            )}
           </Field>
 
           <Field label="Email" error={errors.email?.message}>

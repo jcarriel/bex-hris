@@ -53,6 +53,16 @@ class NotificationRepository {
       [now, userId],
     );
   }
+
+  async deleteOne(id: string, userId: string): Promise<void> {
+    const db = getDatabase();
+    await db.run(`DELETE FROM notifications WHERE id = ? AND userId = ?`, [id, userId]);
+  }
+
+  async deleteAll(userId: string): Promise<void> {
+    const db = getDatabase();
+    await db.run(`DELETE FROM notifications WHERE userId = ?`, [userId]);
+  }
 }
 
 export default new NotificationRepository();

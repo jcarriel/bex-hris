@@ -39,4 +39,7 @@ export const leavesService = {
 
   delete: (id: string): Promise<void> =>
     api.delete(`/leaves/${id}`).then(() => undefined),
+
+  getBalance: (employeeId: string): Promise<{ accrued: number; used: number; available: number }> =>
+    api.get<{ success: boolean; data: { accrued: number; used: number; available: number } }>(`/leaves/balance/${employeeId}`).then((r) => r.data.data),
 }

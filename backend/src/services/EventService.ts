@@ -42,16 +42,25 @@ class EventService {
     return Math.round((target.getTime() - today.getTime()) / 86400000);
   }
 
-  // Next occurrence of a birthday (MM-DD) relative to today
-  private nextBirthdayDate(dateOfBirth: string): string {
+  // Next occurrence of a MM-DD date relative to today (used for birthdays & contract anniversaries)
+  // Uses local date construction to avoid UTC timezone offset issues
+  private nextAnniversaryDate(dateStr: string): string {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const dob = new Date(dateOfBirth);
-    const mm = String(dob.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(dob.getUTCDate()).padStart(2, '0');
+    const parts = dateStr.split('T')[0].split('-').map(Number);
+    const mm = parts[1]; // 1-12
+    const dd = parts[2];
     const thisYear = today.getFullYear();
-    let candidate = new Date(`${thisYear}-${mm}-${dd}`);
-    if (candidate < today) candidate = new Date(`${thisYear + 1}-${mm}-${dd}`);
-    return candidate.toISOString().split('T')[0];
+    let candidate = new Date(thisYear, mm - 1, dd - 1); // 1 day before anniversary
+    if (candidate < today) candidate = new Date(thisYear + 1, mm - 1, dd - 1);
+    // Return as YYYY-MM-DD using local date parts
+    const y = candidate.getFullYear();
+    const mo = String(candidate.getMonth() + 1).padStart(2, '0');
+    const dy = String(candidate.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${dy}`;
+  }
+
+  private nextBirthdayDate(dateOfBirth: string): string {
+    return this.nextAnniversaryDate(dateOfBirth);
   }
 
   // ── auto events ──────────────────────────────────────────────────
@@ -86,29 +95,35 @@ class EventService {
 
   async getUpcomingContractExpiries(daysAhead: number): Promise<AutoEvent[]> {
     const db = getDatabase();
-    const today = this.todayStr();
-    const future = new Date(Date.now() + daysAhead * 86400000).toISOString().split('T')[0];
     const employees = await db.all(
-      `SELECT id, firstName, lastName, contractEndDate
-       FROM employees
-       WHERE contractEndDate IS NOT NULL AND contractEndDate BETWEEN ? AND ? AND status = 'active'
-       ORDER BY contractEndDate ASC`,
-      [today, future]
+      `SELECT e.id, e.firstName, e.lastName, e.hireDate,
+              COALESCE(ca.value, e.contratoActual) AS contratoActual
+       FROM employees e
+       LEFT JOIN catalogs ca ON e.contratoActualId = ca.id AND ca.type = 'contrato_actual'
+       WHERE e.hireDate IS NOT NULL
+       AND e.status = 'active'
+       AND (COALESCE(ca.value, e.contratoActual) IS NULL OR COALESCE(ca.value, e.contratoActual) != 'CT- INDEFINIDO JORNADA COMPLETA')`
     );
-    return employees.map((emp: any) => {
-      const name = `${emp.firstName} ${emp.lastName}`;
-      return {
-        id: `ce-${emp.id}`,
-        type: 'contract_expiry' as const,
-        title: `Contrato por vencer — ${name}`,
-        description: `El contrato de ${name} vence el ${new Date(emp.contractEndDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-        eventDate: emp.contractEndDate,
-        employeeId: emp.id,
-        employeeName: name,
-        daysAway: this.daysUntil(emp.contractEndDate),
-        daysNotice: 30,
-      };
-    });
+    const results: AutoEvent[] = [];
+    for (const emp of employees) {
+      const nextExpiry = this.nextAnniversaryDate(emp.hireDate);
+      const daysAway = this.daysUntil(nextExpiry);
+      if (daysAway >= 0 && daysAway <= daysAhead) {
+        const name = `${emp.firstName} ${emp.lastName}`;
+        results.push({
+          id: `ce-${emp.id}`,
+          type: 'contract_expiry' as const,
+          title: `Contrato por vencer — ${name}`,
+          description: `El contrato de ${name} vence el ${new Date(nextExpiry + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+          eventDate: nextExpiry,
+          employeeId: emp.id,
+          employeeName: name,
+          daysAway,
+          daysNotice: 30,
+        });
+      }
+    }
+    return results.sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   }
 
   // ── unified upcoming ─────────────────────────────────────────────

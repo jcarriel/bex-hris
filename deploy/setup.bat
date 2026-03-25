@@ -47,8 +47,8 @@ echo       OK
 
 echo.
 echo [3/8] Instalando PM2...
-call npm install -g pm2 >nul 2>&1
-pm2 --version >nul 2>&1
+cmd /c "npm install -g pm2" >nul 2>&1
+cmd /c "pm2 --version" >nul 2>&1
 if %errorLevel% NEQ 0 (
     echo [ERROR] No se pudo instalar PM2.
     pause
@@ -59,19 +59,19 @@ echo       OK - PM2 instalado
 echo.
 echo [4/8] Instalando dependencias y compilando backend...
 cd /d "%BACKEND_DIR%"
-call npm install
+cmd /c "npm install"
 if %errorLevel% NEQ 0 ( echo [ERROR] Fallo npm install del backend. & pause & exit /b 1 )
-call npx tsc --noEmitOnError false
+cmd /c "npx tsc --noEmitOnError false"
 if %errorLevel% NEQ 0 ( echo [ERROR] Fallo la compilacion del backend. & pause & exit /b 1 )
-call npx tsc-alias
+cmd /c "npx tsc-alias"
 echo       OK
 
 echo.
 echo [5/8] Instalando dependencias y compilando frontend...
 cd /d "%FRONTEND_DIR%"
-call npm install
+cmd /c "npm install"
 if %errorLevel% NEQ 0 ( echo [ERROR] Fallo npm install del frontend. & pause & exit /b 1 )
-call npm run build
+cmd /c "npm run build"
 if %errorLevel% NEQ 0 ( echo [ERROR] Fallo la compilacion del frontend. & pause & exit /b 1 )
 echo       OK
 
@@ -95,12 +95,11 @@ echo       OK - nginx.conf configurado
 echo.
 echo [7/8] Configurando PM2 para inicio automatico con Windows...
 cd /d "%BACKEND_DIR%"
-call pm2 delete bex-hris-backend >nul 2>&1
-call pm2 start server.js --name bex-hris-backend
-call pm2 save
-:: Registrar PM2 como servicio Windows (usando pm2-windows-startup si disponible)
-call npm install -g pm2-windows-startup >nul 2>&1
-call pm2-startup install >nul 2>&1
+cmd /c "pm2 delete bex-hris-backend" >nul 2>&1
+cmd /c "pm2 start server.js --name bex-hris-backend"
+cmd /c "pm2 save"
+cmd /c "npm install -g pm2-windows-startup" >nul 2>&1
+cmd /c "pm2-startup install" >nul 2>&1
 echo       OK
 
 echo.

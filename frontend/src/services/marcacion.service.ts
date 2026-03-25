@@ -65,4 +65,9 @@ export const marcacionService = {
 
   deleteSchedule: (id: string) =>
     api.delete(`/department-schedules/${id}`).then((r) => r.data),
+
+  getPeriodByYearMonth: (year: number, month: number): Promise<Marcacion[]> =>
+    api.get<{ success: boolean; data: Marcacion[] }>('/marcacion/period/data', {
+      params: { year, month },
+    }).then((r) => r.data.data),
 }

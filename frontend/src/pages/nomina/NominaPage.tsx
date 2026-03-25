@@ -1,15 +1,17 @@
 import { useState, useMemo } from 'react'
+import { toast } from 'sonner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DollarSign, Users, TrendingDown, Wallet,
   Search, Trash2, X, Eye, ChevronLeft, ChevronRight,
-  FileDown, Loader2,
+  FileDown, Loader2, ClipboardList, Check,
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { cn } from '@/lib/utils'
 import { nominaService, type PayrollRecord } from '@/services/nomina.service'
 import { departmentsService } from '@/services/departments.service'
+import { marcacionService, type Marcacion } from '@/services/marcacion.service'
 
 /* ─── helpers ────────────────────────────────────────────────────── */
 
@@ -397,6 +399,132 @@ function RolDePagos({ record, onClose }: { record: PayrollRecord; onClose: () =>
   )
 }
 
+/* ─── Attendance import modal ────────────────────────────────────── */
+
+interface AttendanceRow {
+  employeeName: string
+  cedula: string
+  totalMinutes: number
+  days: number
+}
+
+function aggregateAttendance(records: Marcacion[]): AttendanceRow[] {
+  const map = new Map<string, AttendanceRow>()
+
+  for (const rec of records) {
+    const key = rec.cedula || rec.employeeName
+    if (!map.has(key)) {
+      map.set(key, { employeeName: rec.employeeName, cedula: rec.cedula, totalMinutes: 0, days: 0 })
+    }
+    const row = map.get(key)!
+
+    // Parse totalTime "HH:MM" or "HH:MM:SS" → minutes
+    if (rec.totalTime) {
+      const parts = rec.totalTime.split(':').map(Number)
+      const minutes = (parts[0] || 0) * 60 + (parts[1] || 0)
+      row.totalMinutes += minutes
+    }
+    if (rec.dailyAttendance === 'Presente' || rec.firstCheckIn) {
+      row.days += 1
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.employeeName.localeCompare(b.employeeName))
+}
+
+function AttendanceImportModal({
+  year,
+  month,
+  onClose,
+  onConfirm,
+}: {
+  year: number
+  month: number
+  onClose: () => void
+  onConfirm: (rows: AttendanceRow[]) => void
+}) {
+  const { data: marcaciones = [], isLoading, isError } = useQuery({
+    queryKey: ['marcacion-period', year, month],
+    queryFn: () => marcacionService.getPeriodByYearMonth(year, month),
+    staleTime: 60_000,
+  })
+
+  const rows = useMemo(() => aggregateAttendance(marcaciones), [marcaciones])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-[var(--bg-surface)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[80vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div>
+            <h2 className="font-semibold text-sm text-[var(--text-1)]">Importar Horas desde Asistencia</h2>
+            <p className="text-xs text-[var(--text-3)] mt-0.5">{MONTHS[month - 1]} {year}</p>
+          </div>
+          <button onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text-1)]"><X size={16} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {isLoading && (
+            <div className="flex items-center justify-center py-16 gap-2 text-[var(--text-3)] text-sm">
+              <Loader2 size={16} className="animate-spin" /> Cargando datos de asistencia...
+            </div>
+          )}
+          {isError && (
+            <div className="text-center py-12 text-sm text-red-500">Error al cargar datos de asistencia.</div>
+          )}
+          {!isLoading && !isError && rows.length === 0 && (
+            <div className="text-center py-12 text-sm text-[var(--text-3)]">
+              No hay registros de asistencia para {MONTHS[month - 1]} {year}.
+            </div>
+          )}
+          {!isLoading && rows.length > 0 && (
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ backgroundColor: 'var(--bg-hover)' }}>
+                  {['Empleado', 'Cédula', 'Días Asistidos', 'Horas Totales'].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-semibold uppercase tracking-wider text-[var(--text-3)] border-b" style={{ borderColor: 'var(--border)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.cedula || r.employeeName} className="border-b hover:bg-[var(--bg-hover)] transition-colors" style={{ borderColor: 'var(--border)' }}>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-1)]">{r.employeeName}</td>
+                    <td className="px-4 py-2.5 font-mono text-[var(--text-2)]">{r.cedula}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-2)]">{r.days}</td>
+                    <td className="px-4 py-2.5 font-semibold text-[var(--accent)]">
+                      {Math.floor(r.totalMinutes / 60)}h {r.totalMinutes % 60}m
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-5 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
+          <span className="text-xs text-[var(--text-3)]">{rows.length} empleados encontrados</span>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg border border-[var(--border)] text-sm text-[var(--text-2)] hover:bg-[var(--bg-hover)]">Cancelar</button>
+            <button
+              onClick={() => { onConfirm(rows); onClose() }}
+              disabled={rows.length === 0 || isLoading}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              <Check size={14} /> Usar estos datos
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Main page ──────────────────────────────────────────────────── */
 
 export function NominaPage() {
@@ -415,8 +543,10 @@ export function NominaPage() {
   const [viewing,         setViewing]         = useState<PayrollRecord | null>(null)
   const [confirmDeleteId, setConfirm]         = useState<string | null>(null)
   const [confirmPeriod,   setConfirmPeriod]   = useState(false)
-  const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set())
-  const [exporting,       setExporting]       = useState(false)
+  const [selectedIds,       setSelectedIds]       = useState<Set<string>>(new Set())
+  const [exporting,         setExporting]         = useState(false)
+  const [showAttImport,     setShowAttImport]     = useState(false)
+  const [importedHours,     setImportedHours]     = useState<Map<string, AttendanceRow>>(new Map())
 
   /* Load departments for id→name resolution */
   const { data: departments = [] } = useQuery({
@@ -535,12 +665,27 @@ export function NominaPage() {
   }
 
   const resetFilters = () => { setSearch(''); setFilterType(''); setFilterDept(''); setFilterPosition(''); setPage(1); setSelectedIds(new Set()) }
-  const handleYearChange  = (y: number) => { setSelYear(y);  resetFilters() }
-  const handleMonthChange = (m: number) => { setSelMonth(m); resetFilters() }
+  const handleYearChange  = (y: number) => { setSelYear(y);  resetFilters(); setImportedHours(new Map()) }
+  const handleMonthChange = (m: number) => { setSelMonth(m); resetFilters(); setImportedHours(new Map()) }
+
+  const handleAttendanceImportConfirm = (rows: AttendanceRow[]) => {
+    const map = new Map<string, AttendanceRow>()
+    rows.forEach((r) => { map.set(r.cedula || r.employeeName, r) })
+    setImportedHours(map)
+    toast.success(`Datos de asistencia importados: ${rows.length} empleados`)
+  }
 
   return (
     <>
       {viewing && <RolDePagos record={viewing} onClose={() => setViewing(null)} />}
+      {showAttImport && (
+        <AttendanceImportModal
+          year={selYear}
+          month={selMonth}
+          onClose={() => setShowAttImport(false)}
+          onConfirm={handleAttendanceImportConfirm}
+        />
+      )}
 
       <div className="p-6 space-y-5">
 
@@ -585,6 +730,24 @@ export function NominaPage() {
             icon={<Wallet size={16} className="text-emerald-500" />}       color="bg-emerald-500/10" />
         </div>
 
+        {/* Attendance import banner */}
+        {importedHours.size > 0 && (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+              <ClipboardList size={15} />
+              <span className="font-medium">
+                Datos de asistencia importados para {MONTHS[selMonth - 1]} {selYear}
+              </span>
+              <span className="text-xs opacity-70">— {importedHours.size} empleados · Las horas aparecen en la tabla</span>
+            </div>
+            <button
+              onClick={() => setImportedHours(new Map())}
+              className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 transition-colors">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Table card */}
         <div className="rounded-xl border overflow-hidden"
           style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
@@ -615,6 +778,20 @@ export function NominaPage() {
                 </button>
               )}
             </div>
+
+            {/* Import from Attendance */}
+            <button
+              onClick={() => setShowAttImport(true)}
+              title="Importar horas desde asistencia"
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                importedHours.size > 0
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-400/30'
+                  : 'text-[var(--text-2)] border border-[var(--border)] hover:bg-[var(--bg-hover)]',
+              )}>
+              <ClipboardList size={13} />
+              {importedHours.size > 0 ? `Asistencia (${importedHours.size})` : 'Importar Asistencia'}
+            </button>
 
             {/* Export PDF */}
             <button
@@ -716,12 +893,13 @@ export function NominaPage() {
                 </th>
                 {[
                   'Apellidos y Nombres','Cédula','Cargo',
+                  ...(importedHours.size > 0 ? ['Horas Asist.'] : []),
                   'Total Ingresos','Total Egresos','Total a Pagar','',
                 ].map((h) => (
                   <th key={h}
                     className={cn(
                       'text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)] px-4 py-3',
-                      ['Total Ingresos','Total Egresos','Total a Pagar'].includes(h) ? 'text-right' : 'text-left',
+                      ['Total Ingresos','Total Egresos','Total a Pagar','Horas Asist.'].includes(h) ? 'text-right' : 'text-left',
                     )}>
                     {h}
                   </th>
@@ -730,11 +908,11 @@ export function NominaPage() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={8} className="text-center py-10 text-xs text-[var(--text-3)]">Cargando...</td></tr>
+                <tr><td colSpan={importedHours.size > 0 ? 9 : 8} className="text-center py-10 text-xs text-[var(--text-3)]">Cargando...</td></tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-xs text-[var(--text-3)]">
+                  <td colSpan={importedHours.size > 0 ? 9 : 8} className="text-center py-12 text-xs text-[var(--text-3)]">
                     {search
                       ? 'Sin resultados para la búsqueda'
                       : 'No hay registros de nómina para este período'}
@@ -751,7 +929,7 @@ export function NominaPage() {
                     )}
                     style={{ borderColor: 'var(--border)' }}>
                     {confirmDeleteId === row.id ? (
-                      <td colSpan={8} className="px-4 py-3">
+                      <td colSpan={importedHours.size > 0 ? 9 : 8} className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-[var(--text-2)]">
                             ¿Eliminar registro de <strong>{row.employeeName}</strong>?
@@ -783,6 +961,17 @@ export function NominaPage() {
                         </td>
                         <td className="px-4 py-3 text-[var(--text-2)] font-mono text-xs">{row.cedula}</td>
                         <td className="px-4 py-3 text-[var(--text-2)] max-w-[160px] truncate">{row.position}</td>
+                        {importedHours.size > 0 && (() => {
+                          const att = importedHours.get(row.cedula)
+                          return (
+                            <td className="px-4 py-3 text-right tabular-nums text-xs">
+                              {att
+                                ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">{Math.floor(att.totalMinutes / 60)}h {att.totalMinutes % 60}m</span>
+                                : <span className="text-[var(--text-3)]">—</span>
+                              }
+                            </td>
+                          )
+                        })()}
                         <td className="px-4 py-3 text-right tabular-nums text-[var(--text-2)]">
                           {fmtUSD(t.totalIncome)}
                         </td>
@@ -818,7 +1007,7 @@ export function NominaPage() {
               <tfoot>
                 <tr style={{ backgroundColor: 'var(--bg-surface)', borderTop: '2px solid var(--border)' }}>
                   <td />
-                  <td colSpan={3} className="px-4 py-2.5 text-xs font-semibold text-[var(--text-2)]">
+                  <td colSpan={importedHours.size > 0 ? 4 : 3} className="px-4 py-2.5 text-xs font-semibold text-[var(--text-2)]">
                     TOTALES ({filtered.length} registros)
                   </td>
                   <td className="px-4 py-2.5 text-right text-xs font-bold text-[var(--text-1)] tabular-nums">

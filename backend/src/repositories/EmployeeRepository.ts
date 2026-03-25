@@ -310,17 +310,26 @@ export class EmployeeRepository {
 
   async getEmployeesWithExpiringContracts(daysUntilExpiry: number): Promise<Employee[]> {
     const db = getDatabase();
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + daysUntilExpiry);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    return db.all(
-      `SELECT * FROM employees 
-       WHERE contractEndDate IS NOT NULL 
-       AND contractEndDate <= ? 
-       AND status = 'active'
-       ORDER BY contractEndDate`,
-      [futureDate.toISOString().split('T')[0]]
+    const candidates = await db.all(
+      `SELECT e.*, COALESCE(ca.value, e.contratoActual) AS contratoActualResolved
+       FROM employees e
+       LEFT JOIN catalogs ca ON e.contratoActualId = ca.id AND ca.type = 'contrato_actual'
+       WHERE e.hireDate IS NOT NULL
+       AND e.status = 'active'
+       AND (COALESCE(ca.value, e.contratoActual) IS NULL OR COALESCE(ca.value, e.contratoActual) != 'CT- INDEFINIDO JORNADA COMPLETA')`
     );
+
+    return candidates.filter((emp: any) => {
+      const parts = (emp.hireDate as string).split('T')[0].split('-').map(Number);
+      const mm = parts[1]; const dd = parts[2];
+      const thisYear = today.getFullYear();
+      let next = new Date(thisYear, mm - 1, dd - 1);
+      if (next < today) next = new Date(thisYear + 1, mm - 1, dd - 1);
+      const daysAway = Math.round((next.getTime() - today.getTime()) / 86400000);
+      return daysAway >= 0 && daysAway <= daysUntilExpiry;
+    });
   }
 }
 

@@ -55,7 +55,12 @@
       "Bash(netstat -ano)",
       "Bash(findstr :4000)",
       "Bash(tasklist:*)",
-      "Bash(npx tsc-alias:*)"
+      "Bash(npx tsc-alias:*)",
+      "Bash(find C:/Users/Jean/Desktop/Trabajos/bex-hris/frontend/src/store -name *.ts)",
+      "Bash(del:*)",
+      "Bash(find /c/Users/Jean/Desktop/Trabajos/bex-hris/backend -type f \\\\\\(-name *migration* -o -name *db* -o -name *.sql \\\\\\))",
+      "Bash(find /c/Users/Jean/Desktop/Trabajos/bex-hris/backend -name *.sql -o -name *migration* -o -name *schema*)",
+      "Bash(grep -r \"approvedBy\\\\|salary_history\\\\|employee_history\\\\|position_history\" /c/Users/Jean/Desktop/Trabajos/bex-hris/backend/src --include=*.ts)"
     ]
   }
 }

@@ -12,6 +12,16 @@ import { eventsService, type CalendarEvent, type EventType, type CreateEventDto,
 import { departmentsService } from '@/services/departments.service'
 import { empleadosService } from '@/services/empleados.service'
 
+/* ─── date helper: evita el desfase UTC → local ──────────────────── */
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+function localTodayStr(): string {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+}
+
 /* ─── meta ───────────────────────────────────────────────────────── */
 
 const TYPE_META: Record<EventType, { label: string; color: string; bg: string; icon: React.ElementType }> = {
@@ -67,7 +77,7 @@ function MiniCalendar({ events, onSelectDate }: { events: CalendarEvent[]; onSel
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = localTodayStr()
 
   // map date → event types
   const eventMap = useMemo(() => {
@@ -254,7 +264,7 @@ function EventCard({
   const Icon  = meta.icon
   const days  = event.daysAway ?? 0
   const badge = daysLabel(days)
-  const dateStr = new Date(event.eventDate).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+  const dateStr = parseLocalDate(event.eventDate).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
 
   return (
     <div className={cn('flex items-start gap-3 p-3.5 rounded-xl border transition-colors hover:bg-[var(--bg-hover)]')}
@@ -620,7 +630,7 @@ export function EventosPage() {
                 <button onClick={() => setSelectedDate(null)}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg text-[var(--text-2)] hover:bg-[var(--bg-hover)] transition-colors"
                   style={{ borderColor: 'var(--border)' }}>
-                  <X size={11} /> {new Date(selectedDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                  <X size={11} /> {parseLocalDate(selectedDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                 </button>
               )}
 
@@ -671,7 +681,7 @@ export function EventosPage() {
               <Calendar size={14} style={{ color: 'var(--accent)' }} />
               <span className="text-sm font-semibold text-[var(--text-1)]">
                 {selectedDate
-                  ? new Date(selectedDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+                  ? parseLocalDate(selectedDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
                   : `Próximos eventos${typeFilter !== 'all' ? ` · ${TYPE_META[typeFilter as EventType]?.label}` : ''}`}
               </span>
               <span className="ml-auto text-xs text-[var(--text-3)]">{displayEvents.length} evento{displayEvents.length !== 1 ? 's' : ''}</span>
@@ -746,7 +756,7 @@ export function EventosPage() {
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-[var(--text-1)] truncate">{e.employeeName}</p>
                       <p className="text-[10px] text-[var(--text-3)] capitalize">
-                        {new Date(e.eventDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                        {parseLocalDate(e.eventDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                       </p>
                     </div>
                     <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2', badge.cls)}>
@@ -775,7 +785,7 @@ export function EventosPage() {
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-[var(--text-1)] truncate">{e.employeeName}</p>
                       <p className="text-[10px] text-[var(--text-3)]">
-                        {new Date(e.eventDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {parseLocalDate(e.eventDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </p>
                     </div>
                     <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2', badge.cls)}>

@@ -8,13 +8,14 @@ import PositionService from '@services/PositionService';
 import PayrollService from '@services/PayrollService';
 import AttendanceService from '@services/AttendanceService';
 import LeaveService from '@services/LeaveService';
-import DocumentService from '@services/DocumentService';
 import DocumentCategoryService from '@services/DocumentCategoryService';
 import { TaskService } from '@services/TaskService';
 import NotificationScheduleService from '@services/NotificationScheduleService';
 import SchedulerService from '@services/SchedulerService';
 import DocumentGeneratorService from '../services/DocumentGeneratorService';
 import DepartmentScheduleService from '@services/DepartmentScheduleService';
+import NotificationRepository from '@repositories/NotificationRepository';
+import UserRepository from '@repositories/UserRepository';
 import logger from '@utils/logger';
 import { getDatabase } from '@config/database';
 
@@ -314,11 +315,68 @@ export class ResourceController {
   // ===== LEAVES =====
   async createLeave(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const leave = await LeaveService.createLeave(req.body);
+      const data = { ...req.body, status: req.body.status || 'pending' };
+
+      // Check for overlapping leaves of the same type
+      if (data.employeeId && data.startDate && data.endDate && data.type) {
+        const db = getDatabase();
+        const overlap = await db.get(
+          `SELECT id FROM leaves
+           WHERE employeeId = ? AND type = ? AND status != 'rejected'
+           AND startDate <= ? AND endDate >= ?`,
+          [data.employeeId, data.type, data.endDate, data.startDate]
+        );
+        if (overlap) {
+          res.status(409).json({ success: false, message: 'Ya existe una solicitud del mismo tipo en ese rango de fechas' });
+          return;
+        }
+      }
+
+      const leave = await LeaveService.createLeave(data);
       res.status(201).json({ success: true, data: leave });
     } catch (error) {
       logger.error('Create leave error', error);
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    }
+  }
+
+  async getLeaveBalance(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const db = getDatabase();
+      const { employeeId } = req.params;
+
+      const employee = await db.get(
+        'SELECT hireDate FROM employees WHERE id = ?',
+        [employeeId]
+      ) as any;
+      if (!employee) {
+        res.status(404).json({ success: false, message: 'Employee not found' });
+        return;
+      }
+
+      // Calculate accrued vacation days: 15 days per year worked (proportional)
+      const hireDate = new Date(employee.hireDate);
+      const now = new Date();
+      const yearsWorked = (now.getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      const accruedDays = Math.floor(yearsWorked * 15);
+
+      // Used vacation days (approved vacation leaves)
+      const usedResult = await db.get(
+        `SELECT COALESCE(SUM(
+          CAST((julianday(endDate) - julianday(startDate) + 1) AS INTEGER)
+        ), 0) as used
+        FROM leaves
+        WHERE employeeId = ? AND type = 'vacation' AND status = 'approved'`,
+        [employeeId]
+      ) as any;
+
+      const used = usedResult.used || 0;
+      const available = Math.max(0, accruedDays - used);
+
+      res.json({ success: true, data: { accrued: accruedDays, used, available } });
+    } catch (err) {
+      logger.error('Get leave balance error', err);
+      res.status(500).json({ success: false, message: 'Error calculating leave balance' });
     }
   }
 
@@ -361,6 +419,19 @@ export class ResourceController {
         res.status(404).json({ success: false, message: 'Leave not found' });
         return;
       }
+      // Notify all admin users
+      try {
+        const users = await UserRepository.getAll() as any[];
+        const label: Record<string, string> = { vacation: 'Vacaciones', medical: 'Permiso médico', maternity: 'Maternidad', personal: 'Permiso personal', unpaid: 'Permiso sin pago' };
+        for (const u of users.filter(u => u.status !== 'inactive')) {
+          await NotificationRepository.create({
+            userId: u.id,
+            type: 'leave_approved',
+            title: `✅ ${label[leave.type] || 'Permiso'} aprobado`,
+            message: `Se aprobó la solicitud de ${leave.days} día(s) (${leave.startDate} → ${leave.endDate}).`,
+          });
+        }
+      } catch (e) { logger.warn('Could not send leave approval notifications', e); }
       res.status(200).json({ success: true, data: leave });
     } catch (error) {
       logger.error('Approve leave error', error);
@@ -373,6 +444,19 @@ export class ResourceController {
       const { id } = req.params;
       const leave = await LeaveService.rejectLeave(id);
       if (!leave) { res.status(404).json({ success: false, message: 'Leave not found' }); return; }
+      // Notify all admin users
+      try {
+        const users = await UserRepository.getAll() as any[];
+        const label: Record<string, string> = { vacation: 'Vacaciones', medical: 'Permiso médico', maternity: 'Maternidad', personal: 'Permiso personal', unpaid: 'Permiso sin pago' };
+        for (const u of users.filter(u => u.status !== 'inactive')) {
+          await NotificationRepository.create({
+            userId: u.id,
+            type: 'leave_rejected',
+            title: `❌ ${label[leave.type] || 'Permiso'} rechazado`,
+            message: `Se rechazó la solicitud de ${leave.days} día(s) (${leave.startDate} → ${leave.endDate}).`,
+          });
+        }
+      } catch (e) { logger.warn('Could not send leave rejection notifications', e); }
       res.status(200).json({ success: true, data: leave });
     } catch (error) {
       logger.error('Reject leave error', error);
@@ -403,158 +487,6 @@ export class ResourceController {
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
     }
   }
-
-  // ===== DOCUMENTS =====
-  async uploadDocument(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { employeeId, documentType } = req.body;
-      const file = (req as any).file;
-
-      // Si no hay archivo, intentar obtener del body (para multipart/form-data)
-      if (!file && !employeeId && !documentType) {
-        res.status(400).json({ success: false, message: 'Missing required fields: file, employeeId, documentType' });
-        return;
-      }
-
-      if (!employeeId || !documentType) {
-        res.status(400).json({ success: false, message: 'Missing required fields: employeeId, documentType' });
-        return;
-      }
-
-      if (!file) {
-        res.status(400).json({ success: false, message: 'Missing file' });
-        return;
-      }
-
-      // Obtener cédula del empleado
-      const employee = await EmployeeService.getEmployee(employeeId);
-      if (!employee) {
-        res.status(404).json({ success: false, message: 'Employee not found' });
-        return;
-      }
-
-      const document = await DocumentService.uploadDocument(employeeId, file, documentType, (employee as any).cedula);
-      res.status(201).json({ success: true, data: document });
-    } catch (error) {
-      logger.error('Upload document error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getAllDocuments(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const documents = await DocumentService.getAllDocuments();
-      res.status(200).json({ success: true, data: documents });
-    } catch (error) {
-      logger.error('Get all documents error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getDocumentsByEmployee(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { employeeId } = req.params;
-      const documents = await DocumentService.getDocumentsByEmployee(employeeId);
-      res.status(200).json({ success: true, data: documents });
-    } catch (error) {
-      logger.error('Get documents error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getDocumentsByType(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { type } = req.params;
-      const documents = await DocumentService.getDocumentsByType(type);
-      res.status(200).json({ success: true, data: documents });
-    } catch (error) {
-      logger.error('Get documents by type error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async deleteDocument(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const result = await DocumentService.deleteDocument(id);
-      if (!result) {
-        res.status(404).json({ success: false, message: 'Document not found' });
-        return;
-      }
-      res.status(200).json({ success: true, message: 'Document deleted' });
-    } catch (error) {
-      logger.error('Delete document error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async downloadDocument(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const { filePath, fileName } = await DocumentService.downloadDocument(id);
-      res.download(filePath, fileName);
-    } catch (error) {
-      logger.error('Download document error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  // ===== DOCUMENT CATEGORIES =====
-  async createDocumentCategory(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { name, description } = req.body;
-      if (!name) {
-        res.status(400).json({ success: false, message: 'Name is required' });
-        return;
-      }
-      const category = await DocumentCategoryService.createCategory(name, description);
-      res.status(201).json({ success: true, data: category });
-    } catch (error) {
-      logger.error('Create document category error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getDocumentCategories(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const categories = await DocumentCategoryService.getAllCategories();
-      res.status(200).json({ success: true, data: categories });
-    } catch (error) {
-      logger.error('Get document categories error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async updateDocumentCategory(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const category = await DocumentCategoryService.updateCategory(id, req.body);
-      if (!category) {
-        res.status(404).json({ success: false, message: 'Category not found' });
-        return;
-      }
-      res.status(200).json({ success: true, data: category });
-    } catch (error) {
-      logger.error('Update document category error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async deleteDocumentCategory(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const result = await DocumentCategoryService.deleteCategory(id);
-      if (!result) {
-        res.status(404).json({ success: false, message: 'Category not found' });
-        return;
-      }
-      res.status(200).json({ success: true, message: 'Category deleted successfully' });
-    } catch (error) {
-      logger.error('Delete document category error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
 
   // ===== TASKS =====
   async createTask(req: AuthRequest, res: Response): Promise<void> {

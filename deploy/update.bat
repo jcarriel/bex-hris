@@ -14,20 +14,20 @@ set "FRONTEND_DIR=%ROOT_DIR%\frontend"
 
 echo [1/3] Compilando backend...
 cd /d "%BACKEND_DIR%"
-call npx tsc --noEmitOnError false
+cmd /c "npx tsc --noEmitOnError false"
 if %errorLevel% NEQ 0 ( echo [ERROR] Fallo la compilacion del backend. & pause & exit /b 1 )
-call npx tsc-alias
+cmd /c "npx tsc-alias"
 echo       OK
 
 echo [2/3] Compilando frontend...
 cd /d "%FRONTEND_DIR%"
-call npm run build
+cmd /c "npm run build"
 if %errorLevel% NEQ 0 ( echo [ERROR] Fallo la compilacion del frontend. & pause & exit /b 1 )
 echo       OK
 
 echo [3/3] Reiniciando servicios...
 cd /d "%BACKEND_DIR%"
-pm2 restart bex-hris-backend
+cmd /c "pm2 restart bex-hris-backend"
 echo       OK - Backend reiniciado con PM2
 
 tasklist /FI "IMAGENAME eq nginx.exe" 2>nul | findstr "nginx.exe" >nul

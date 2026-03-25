@@ -24,6 +24,8 @@ import WorkforceController from '@controllers/WorkforceController';
 import SocialCaseController from '@controllers/SocialCaseController';
 import EventDigestScheduler from '@services/EventDigestScheduler';
 import EventTypeConfigService from '@services/EventTypeConfigService';
+import AuditController from '@controllers/AuditController';
+import DashboardController from '@controllers/DashboardController';
 import logger from '@utils/logger';
 import errorLogger from '@utils/errorLogger';
 
@@ -70,12 +72,18 @@ app.put('/api/admin/users/:id',                  authMiddleware, adminMiddleware
 app.delete('/api/admin/users/:id',               authMiddleware, adminMiddleware, (req, res) => UserAdminController.delete(req, res));
 app.post('/api/admin/users/:id/reset-password',  authMiddleware, adminMiddleware, (req, res) => UserAdminController.resetPassword(req, res));
 
+// Audit logs route (admin only)
+app.get('/api/audit-logs', authMiddleware, adminMiddleware, (req, res) => AuditController.getAll(req, res));
+
 // Roles routes (admin only for write, all authenticated for read)
 app.get('/api/roles',         authMiddleware,                    (req, res) => RoleController.getAll(req, res));
 app.get('/api/roles/modules', authMiddleware,                    (req, res) => RoleController.getModules(req, res));
 app.post('/api/roles',        authMiddleware, adminMiddleware,   (req, res) => RoleController.create(req, res));
 app.put('/api/roles/:id',     authMiddleware, adminMiddleware,   (req, res) => RoleController.update(req, res));
 app.delete('/api/roles/:id',  authMiddleware, adminMiddleware,   (req, res) => RoleController.delete(req, res));
+
+// Dashboard stats route
+app.get('/api/dashboard/stats', authMiddleware, (req, res) => DashboardController.getStats(req, res));
 
 // Employee routes
 app.post('/api/employees', authMiddleware, (req, res) => EmployeeController.create(req, res));
@@ -182,6 +190,7 @@ app.delete('/api/marcacion/:id', authMiddleware, (req, res) => ResourceControlle
 app.get('/api/leaves', authMiddleware, (req, res) => ResourceController.getAllLeaves(req, res));
 app.post('/api/leaves', authMiddleware, (req, res) => ResourceController.createLeave(req, res));
 app.get('/api/leaves/pending', authMiddleware, (req, res) => ResourceController.getPendingLeaves(req, res));
+app.get('/api/leaves/balance/:employeeId', authMiddleware, (req, res) => ResourceController.getLeaveBalance(req, res));
 app.get('/api/leaves/:employeeId', authMiddleware, (req, res) => ResourceController.getLeaveByEmployee(req, res));
 app.post('/api/leaves/:id/approve', authMiddleware, (req, res) => ResourceController.approveLeave(req, res));
 app.post('/api/leaves/:id/reject', authMiddleware, (req, res) => ResourceController.rejectLeave(req, res));
@@ -236,6 +245,8 @@ app.get('/api/notifications',              authMiddleware, (req, res) => Notific
 app.get('/api/notifications/unread-count', authMiddleware, (req, res) => NotificationController.getUnreadCount(req, res));
 app.put('/api/notifications/read-all',     authMiddleware, (req, res) => NotificationController.markAllRead(req, res));
 app.put('/api/notifications/:id/read',     authMiddleware, (req, res) => NotificationController.markRead(req, res));
+app.delete('/api/notifications/all',       authMiddleware, (req, res) => NotificationController.deleteAll(req, res));
+app.delete('/api/notifications/:id',       authMiddleware, (req, res) => NotificationController.deleteOne(req, res));
 
 // Recurring Tasks routes
 app.post('/api/recurring-tasks', authMiddleware, (req, res) => RecurringTaskController.create(req, res));

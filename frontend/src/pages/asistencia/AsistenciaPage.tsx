@@ -46,7 +46,8 @@ const getRandomTime = (minH: number, minM: number, maxH: number, maxM: number): 
   return minutesToTime(Math.floor(Math.random() * (hi - lo + 1)) + lo)
 }
 const weekNumber = (dateStr: string): number => {
-  const d = new Date(dateStr)
+  const [y, m, day] = dateStr.split('-').map(Number)
+  const d = new Date(y, m - 1, day)
   const jan1 = new Date(d.getFullYear(), 0, 1)
   return Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7)
 }

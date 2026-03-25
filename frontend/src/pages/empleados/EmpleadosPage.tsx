@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useUiStore } from '@/store/uiStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useReactTable,
@@ -26,6 +27,12 @@ import { Avatar } from '@/components/shared/Avatar'
 import { Badge } from '@/components/shared/Badge'
 import type { Empleado, EmpleadoFormData } from '@/types/empleado.types'
 import { cn, formatCurrency } from '@/lib/utils'
+
+// ─── Sort icon ────────────────────────────────────────────────────────────────
+function SortIcon({ col, sortBy, sortDir }: { col: string; sortBy: string; sortDir: string }) {
+  if (col !== sortBy) return <span className="ml-1 text-[var(--text-3)] opacity-30">↕</span>
+  return <span className="ml-1 text-[var(--accent)]">{sortDir === 'asc' ? '↑' : '↓'}</span>
+}
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 const statusMap: Record<Empleado['status'], { label: string; variant: 'success' | 'warning' | 'danger' | 'neutral' }> = {
@@ -179,17 +186,29 @@ export function EmpleadosPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // Filters
-  const [search, setSearch]             = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [deptFilter, setDeptFilter]     = useState('')
-  const [positionFilter, setPositionFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [page, setPage]                 = useState(1)
+  // Persistent filters via uiStore
+  const { empleadoFilters, setEmpleadoFilters } = useUiStore()
+  const { search, dept: deptFilter, position: positionFilter, status: statusFilter, page, sortBy, sortDir } = empleadoFilters
+
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   const limit = 14
 
+  const setSearch = (v: string) => setEmpleadoFilters({ search: v })
+  const setDeptFilter = (v: string) => setEmpleadoFilters({ dept: v, page: 1 })
+  const setPositionFilter = (v: string) => setEmpleadoFilters({ position: v, page: 1 })
+  const setStatusFilter = (v: string) => setEmpleadoFilters({ status: v, page: 1 })
+  const setPage = (p: number) => setEmpleadoFilters({ page: p })
+
+  const handleSort = (col: string) => {
+    if (col === sortBy) {
+      setEmpleadoFilters({ sortDir: sortDir === 'asc' ? 'desc' : 'asc' })
+    } else {
+      setEmpleadoFilters({ sortBy: col, sortDir: 'asc' })
+    }
+  }
+
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 350)
+    const t = setTimeout(() => { setDebouncedSearch(search); setEmpleadoFilters({ page: 1 }) }, 350)
     return () => clearTimeout(t)
   }, [search])
 
@@ -229,6 +248,13 @@ export function EmpleadosPage() {
   const empleados = data?.data ?? []
   const totalPages = data?.totalPages ?? 1
   const total = data?.total ?? 0
+
+  const sorted = [...(empleados ?? [])].sort((a, b) => {
+    const aVal = (a as any)[sortBy] ?? ''
+    const bVal = (b as any)[sortBy] ?? ''
+    const cmp = String(aVal).localeCompare(String(bVal))
+    return sortDir === 'asc' ? cmp : -cmp
+  })
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const { mutateAsync: createEmpleado, isPending: creating } = useMutation({
@@ -449,7 +475,7 @@ export function EmpleadosPage() {
   )
 
   const table = useReactTable({
-    data: empleados,
+    data: sorted,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -561,14 +587,31 @@ export function EmpleadosPage() {
             <thead>
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b" style={{ borderColor: 'var(--border-color)' }}>
-                  {hg.headers.map((h) => (
-                    <th
-                      key={h.id}
-                      className="text-left px-4 py-3 text-xs font-medium text-[var(--text-2)] uppercase tracking-wide"
-                    >
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
-                  ))}
+                  {hg.headers.map((h) => {
+                    const sortColMap: Record<string, string> = {
+                      empleado: 'firstName',
+                      departamento: 'departmentName',
+                      cargo: 'positionName',
+                      estado: 'status',
+                    }
+                    const sortCol = sortColMap[h.id]
+                    const isSortable = !!sortCol
+                    return (
+                      <th
+                        key={h.id}
+                        onClick={isSortable ? () => handleSort(sortCol) : undefined}
+                        className={cn(
+                          'text-left px-4 py-3 text-xs font-medium text-[var(--text-2)] uppercase tracking-wide',
+                          isSortable && 'cursor-pointer select-none hover:text-[var(--text-1)]',
+                        )}
+                      >
+                        <span className="inline-flex items-center">
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          {isSortable && <SortIcon col={sortCol} sortBy={sortBy} sortDir={sortDir} />}
+                        </span>
+                      </th>
+                    )
+                  })}
                 </tr>
               ))}
             </thead>
@@ -582,7 +625,7 @@ export function EmpleadosPage() {
                     </div>
                   </td>
                 </tr>
-              ) : empleados.length === 0 ? (
+              ) : sorted.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="text-center py-20">
                     <div className="flex flex-col items-center gap-3 text-[var(--text-3)]">

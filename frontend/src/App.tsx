@@ -2,12 +2,15 @@ import { useEffect } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { router } from '@/router'
 import { useUiStore } from '@/store/uiStore'
+import { applyThemeVars, FONT_SIZES } from '@/lib/theme'
 
 export default function App() {
-  const theme = useUiStore((s) => s.theme)
+  const theme      = useUiStore((s) => s.theme)
+  const accentColor = useUiStore((s) => s.accentColor)
+  const fontSize   = useUiStore((s) => s.fontSize)
 
+  // Apply dark/light class
   useEffect(() => {
-    // Dark mode: add .dark class; Light mode: remove it
     if (theme === 'dark') {
       document.body.classList.add('dark')
       document.body.classList.remove('light')
@@ -15,14 +18,22 @@ export default function App() {
       document.body.classList.remove('dark')
       document.body.classList.add('light')
     }
-  }, [theme])
+    applyThemeVars(theme, accentColor)
+  }, [theme, accentColor])
 
-  // Apply dark class on mount immediately (avoid flash)
+  // Apply font size
   useEffect(() => {
-    const stored = useUiStore.getState().theme
-    if (stored === 'dark') {
-      document.body.classList.add('dark')
-    }
+    const size = FONT_SIZES.find((s) => s.id === fontSize) ?? FONT_SIZES[1]
+    document.documentElement.style.fontSize = `${size.px}px`
+  }, [fontSize])
+
+  // On mount: apply stored settings immediately to avoid flash
+  useEffect(() => {
+    const { theme: t, accentColor: a, fontSize: f } = useUiStore.getState()
+    if (t === 'dark') document.body.classList.add('dark')
+    applyThemeVars(t, a)
+    const size = FONT_SIZES.find((s) => s.id === f) ?? FONT_SIZES[1]
+    document.documentElement.style.fontSize = `${size.px}px`
   }, [])
 
   return <RouterProvider router={router} />

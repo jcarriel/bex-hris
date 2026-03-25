@@ -5,6 +5,7 @@ import { empleadosService } from '@/services/empleados.service'
 import { Plus, X, Trash2, Loader2, Heart, ChevronDown, Edit2, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { EmployeeSearchSelect } from '@/components/shared/EmployeeSearchSelect'
 
 const TYPE_LABEL: Record<SocialCaseType, string> = {
   asistencia_medica:    'Asistencia Médica',
@@ -48,7 +49,7 @@ export function TrabSocialPage() {
   const { data: cases = [], isLoading } = useQuery({ queryKey: ['social-cases'], queryFn: socialCasesService.getAll, staleTime: 30_000 })
   const { data: empResult } = useQuery({ queryKey: ['employees-all'], queryFn: () => empleadosService.getAll({ limit: 9999 }), staleTime: 60_000 })
   const employees: any[] = (empResult as any)?.data ?? []
-  const empMap = new Map(employees.map((e) => [e.id, e.nombre || `${e.primerNombre} ${e.primerApellido}`]))
+  const empMap = new Map(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`]))
 
   const filtered = cases.filter((c) =>
     (filterStatus === 'all' || c.status === filterStatus) &&
@@ -149,7 +150,7 @@ export function TrabSocialPage() {
               <button onClick={() => setShowCreate(false)} className="text-[var(--text-3)] hover:text-[var(--text-1)]"><X size={16} /></button>
             </div>
             {[
-              { label: 'Empleado', el: <select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-[var(--text-1)] outline-none focus:border-[var(--accent)]"><option value="">Seleccionar...</option>{employees.filter(e => e.status === 'active').map((e) => <option key={e.id} value={e.id}>{e.nombre || `${e.primerNombre} ${e.primerApellido}`}</option>)}</select> },
+              { label: 'Empleado', el: <EmployeeSearchSelect value={form.employeeId} onChange={(id) => setForm({ ...form, employeeId: id })} employees={employees.filter((e) => e.status === 'active')} /> },
               { label: 'Tipo', el: <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as SocialCaseType })} className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-[var(--text-1)] outline-none focus:border-[var(--accent)]">{Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> },
               { label: 'Título', el: <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Descripción breve..." className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-[var(--text-1)] outline-none focus:border-[var(--accent)]" /> },
               { label: 'Fecha', el: <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-[var(--text-1)] outline-none focus:border-[var(--accent)]" /> },

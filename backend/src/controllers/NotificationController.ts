@@ -45,6 +45,28 @@ class NotificationController {
       res.status(500).json({ success: false, message: 'Error marking all read' });
     }
   }
+
+  async deleteOne(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) { res.status(401).json({ success: false, message: 'Unauthorized' }); return; }
+      await NotificationRepository.deleteOne(req.params.id, userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Error deleting notification' });
+    }
+  }
+
+  async deleteAll(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) { res.status(401).json({ success: false, message: 'Unauthorized' }); return; }
+      await NotificationRepository.deleteAll(userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Error clearing notifications' });
+    }
+  }
 }
 
 export default new NotificationController();

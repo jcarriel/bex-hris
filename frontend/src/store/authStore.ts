@@ -16,21 +16,41 @@ interface AuthState {
   user: AuthUser | null
   token: string | null
   isAuthenticated: boolean
+  expiresAt: number | null
   login: (user: AuthUser, token: string) => void
   logout: () => void
   setUser: (user: AuthUser) => void
+  checkExpiry: () => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
+      expiresAt: null,
 
-      login: (user, token) => set({ user, token, isAuthenticated: true }),
-      logout: () => set({ user: null, token: null, isAuthenticated: false }),
+      login: (user, token) => set({
+        user,
+        token,
+        isAuthenticated: true,
+        expiresAt: Date.now() + 8 * 60 * 60 * 1000,
+      }),
+
+      logout: () => set({ user: null, token: null, isAuthenticated: false, expiresAt: null }),
+
       setUser: (user) => set({ user }),
+
+      checkExpiry: () => {
+        const { expiresAt, isAuthenticated } = get()
+        if (!isAuthenticated) return false
+        if (expiresAt !== null && Date.now() > expiresAt) {
+          get().logout()
+          return true
+        }
+        return false
+      },
     }),
     { name: 'bex-hris-auth' },
   ),

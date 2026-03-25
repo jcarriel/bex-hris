@@ -29,11 +29,11 @@ if not exist "%NGINX_DIR%\nginx.exe" (
 
 echo [1/2] Iniciando Backend con PM2...
 cd /d "%BACKEND_DIR%"
-pm2 describe bex-hris-backend >nul 2>&1
+cmd /c "pm2 describe bex-hris-backend" >nul 2>&1
 if %errorLevel% EQU 0 (
-    pm2 restart bex-hris-backend
+    cmd /c "pm2 restart bex-hris-backend"
 ) else (
-    pm2 start server.js --name bex-hris-backend
+    cmd /c "pm2 start server.js --name bex-hris-backend"
 )
 echo       OK
 
