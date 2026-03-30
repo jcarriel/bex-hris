@@ -1,0 +1,358 @@
+{
+  "att_rules": "http://localhost:8081/att/api/att_rules/",
+  "attschedules": "http://localhost:8081/att/api/attschedules/",
+  "attshifts": "http://localhost:8081/att/api/attshifts/",
+  "employeeschedule": "http://localhost:8081/att/api/employeeschedule/",
+  "breaktimes": "http://localhost:8081/att/api/breaktimes/",
+  "deptattrules": "http://localhost:8081/att/api/deptattrules/",
+  "holidays": "http://localhost:8081/att/api/holidays/",
+  "leaves": "http://localhost:8081/att/api/leaves/",
+  "leavecategorys": "http://localhost:8081/att/api/leavecategorys/",
+  "manuallogs": "http://localhost:8081/att/api/manuallogs/",
+  "overtimes": "http://localhost:8081/att/api/overtimes/",
+  "report_params": "http://localhost:8081/att/api/report_params/",
+  "report_setting": "http://localhost:8081/att/api/report_setting/",
+  "shift_details": "http://localhost:8081/att/api/shift_details/",
+  "tempschedules": "http://localhost:8081/att/api/tempschedules/",
+  "timeintervals": "http://localhost:8081/att/api/timeintervals/",
+  "trainings": "http://localhost:8081/att/api/trainings/",
+  "trainingcategorys": "http://localhost:8081/att/api/trainingcategorys/",
+  "transactionReport": "http://localhost:8081/att/api/mobiletransactionReport/",
+  "mobiletransactionReport": "http://localhost:8081/att/api/mobiletransactionReport/",
+  "scheduledLogReport": "http://localhost:8081/att/api/scheduledLogReport/",
+  "empSummaryReport": "http://localhost:8081/att/api/empSummaryReport/",
+  "empBirthdayReport": "http://localhost:8081/att/api/empBirthdayReport/",
+  "departmentSummaryReport": "http://localhost:8081/att/api/departmentSummaryReport/",
+  "leaveSummaryReport": "http://localhost:8081/att/api/leaveSummaryReport/",
+  "totalTimeCardReport": "http://localhost:8081/att/api/totalTimeCardReport/",
+  "dailypunchdetailsReport": "http://localhost:8081/att/api/dailypunchdetailsReport/",
+  "monthlyAttDetailsReport": "http://localhost:8081/att/api/monthlyAttDetailsReport/",
+  "lateReport": "http://localhost:8081/att/api/lateReport/",
+  "earlyLeaveReport": "http://localhost:8081/att/api/earlyLeaveReport/",
+  "overtimeReport": "http://localhost:8081/att/api/overtimeReport/",
+  "absentReport": "http://localhost:8081/att/api/absentReport/",
+  "exceptionReport": "http://localhost:8081/att/api/exceptionReport/",
+  "firstLastReport": "http://localhost:8081/att/api/firstLastReport/",
+  "firstInLastOutReport": "http://localhost:8081/att/api/firstInLastOutReport/",
+  "mulTransactionReport": "http://localhost:8081/att/api/mulTransactionReport/",
+  "mulBreakTimeReport": "http://localhost:8081/att/api/mulBreakTimeReport/",
+  "timeCardReport": "http://localhost:8081/att/api/timeCardReport/",
+  "empScheduleReport": "http://localhost:8081/att/api/empScheduleReport/",
+  "appReport": "http://localhost:8081/att/api/appReport/",
+  "leavedetailsReport": "http://localhost:8081/att/api/leavedetailsReport/",
+  "holidaydetailsReport": "http://localhost:8081/att/api/holidaydetailsReport/",
+  "scheduledetailsReport": "http://localhost:8081/att/api/scheduledetailsReport/",
+  "unscheduletrackReport": "http://localhost:8081/att/api/unscheduletrackReport/",
+  "scheduletrackReport": "http://localhost:8081/att/api/scheduletrackReport/",
+  "halfDayReport": "http://localhost:8081/att/api/halfDayReport/",
+  "adminleavedetailsReport": "http://localhost:8081/att/api/adminleavedetailsReport/",
+  "dailyAttendanceReport": "http://localhost:8081/att/api/dailyAttendanceReport/",
+  "dailyDetailsReport": "http://localhost:8081/att/api/dailyDetailsReport/",
+  "dailySummaryReport": "http://localhost:8081/att/api/dailySummaryReport/",
+  "dailyStatusReport": "http://localhost:8081/att/api/dailyStatusReport/",
+  "monthlyBasicStatusReport": "http://localhost:8081/att/api/monthlyBasicStatusReport/",
+  "monthlyStatusSummaryReport": "http://localhost:8081/att/api/monthlyStatusSummaryReport/",
+  "monthlyOTSummaryReport": "http://localhost:8081/att/api/monthlyOTSummaryReport/",
+  "monthlyDurationSummaryReport": "http://localhost:8081/att/api/monthlyDurationSummaryReport/",
+  "monthlyDetailedSummaryReport": "http://localhost:8081/att/api/monthlyDetailedSummaryReport/",
+  "monthlyAttSheetSummaryReport": "http://localhost:8081/att/api/monthlyAttSheetSummaryReport/",
+  "yearlySummaryReport": "http://localhost:8081/att/api/yearlySummaryReport/",
+  "abnormalReport": "http://localhost:8081/att/api/abnormalReport/",
+  "monthlyattendanceReport": "http://localhost:8081/att/api/monthlyattendanceReport/",
+  "bodyTemperatureReport": "http://localhost:8081/att/api/bodyTemperatureReport/",
+  "faceMaskReport": "http://localhost:8081/att/api/faceMaskReport/",
+  "totalTempDetectionReport": "http://localhost:8081/att/api/totalTempDetectionReport/",
+  "verificationPhotoReport": "http://localhost:8081/att/api/verificationPhotoReport/",
+  "deptWiseReport": "http://localhost:8081/att/api/deptWiseReport/",
+  "unregisteredUserReport": "http://localhost:8081/att/api/unregisteredUserReport/"
+}
+
+
+{
+  "terminals": "http://localhost:8081/iclock/api/terminals/",
+  "transactions": "http://localhost:8081/iclock/api/transactions/",
+  "unregister": "http://localhost:8081/iclock/api/unregister/",
+  "publicmessages": "http://localhost:8081/iclock/api/publicmessages/",
+  "privatemessages": "http://localhost:8081/iclock/api/privatemessages/",
+  "biodatas": "http://localhost:8081/iclock/api/biodatas/"
+}
+
+{
+  "departments": "http://localhost:8081/personnel/api/departments/",
+  "areas": "http://localhost:8081/personnel/api/areas/",
+  "locations": "http://localhost:8081/personnel/api/locations/",
+  "positions": "http://localhost:8081/personnel/api/positions/",
+  "employees": "http://localhost:8081/personnel/api/employees/"
+}
+
+{
+  "count": 605,
+  "next": "http://localhost:8081/personnel/api/employee/?page=2",
+  "previous": null,
+  "msg": "",
+  "code": 0,
+  "data": [
+    {
+      "id": "9274315402444",
+      "emp_code": "0958857393",
+      "first_name": "ALVARADO AVILES JUAN ISRAEL",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "CONTRATISTA VARGAS",
+      "department": 10,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "3117716962196",
+      "emp_code": "1",
+      "first_name": "",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "Department",
+      "department": 1,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "9013346404860",
+      "emp_code": "1003736541",
+      "first_name": "ESPINOZA GODOY ALEX FERNANDO",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "NO IDENTIFICADO",
+      "department": 15,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "9306456693653",
+      "emp_code": "1008",
+      "first_name": "",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "Department",
+      "department": 1,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "8644036466604",
+      "emp_code": "102731130",
+      "first_name": "CONDO GUACHUN NESTOR ROMAN",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "SEGURIDAD",
+      "department": 9,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "0960432279576",
+      "emp_code": "103377671",
+      "first_name": "",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "Department",
+      "department": 1,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "9306543984722",
+      "emp_code": "1033776714",
+      "first_name": "RODRIGUEZ PEÑA BRIAM SLEIDER",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "CONTRATISTA LUCIO",
+      "department": 3023,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "8765670163197",
+      "emp_code": "103576807",
+      "first_name": "CUMBE ENCALADA VICENTE OLMEDO",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "EMPAQUE AFILIADO",
+      "department": 3,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "902666069475",
+      "emp_code": "103655411",
+      "first_name": "ANDRADE FLORES ANIBAL PATRICIO",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "EMPAQUE AFILIADO",
+      "department": 3,
+      "position": 1,
+      "position_name": "Position"
+    },
+    {
+      "id": "0793612722967",
+      "emp_code": "10672427",
+      "first_name": "",
+      "last_name": null,
+      "hire_date": null,
+      "dept_name": "Department",
+      "department": 1,
+      "position": 1,
+      "position_name": "Position"
+    }
+  ]
+}
+
+
+Excelente análisis. Aquí está el resumen de lo que encontré y qué implica para tu integración:
+
+---                                                                                                                                                                                                                          Lo que es UTimeMaster
+                                                                                                                                                                                                                            
+Es un sistema Django (Python) de ZKTeco que actúa como intermediario entre el dispositivo biométrico y tu base de datos. Expone una REST API en el puerto 8081 con Django REST Framework.
+
+---
+Cómo se comunica con el biométrico
+
+Los dispositivos ZKTeco usan principalmente dos protocolos:
+
+1. iClock/ADMS (el que usa UTimeMaster)
+
+El dispositivo pushea activamente los registros al servidor. Funciona así:
+Biométrico → HTTP POST → iclockservice (puerto configurable) → BD SQL Server
+El dispositivo está configurado con una URL de servidor. Cada vez que alguien marca, envía los datos automáticamente.
+
+2. SDK/TCP directo (lo que te interesa a ti)
+
+Puedes conectarte directamente al dispositivo por TCP y pullear los datos:
+Tu backend → TCP socket → Biométrico (puerto 4370 por defecto)
+
+---
+Las opciones que tienes
+
+Opción A — Consumir la API de UTimeMaster (más fácil, ya hoy)
+
+UTimeMaster ya expone todo en REST. Los endpoints clave que encontré:
+
+┌──────────────────────────────┬─────────────────────────────────────────┐
+│           Endpoint           │                 Qué da                  │
+├──────────────────────────────┼─────────────────────────────────────────┤
+│ GET /api/iclock/transaction/ │ Registros de marcación (lo que importa) │
+├──────────────────────────────┼─────────────────────────────────────────┤
+│ GET /api/iclock/terminal/    │ Dispositivos conectados                 │
+├──────────────────────────────┼─────────────────────────────────────────┤
+│ GET /api/att/payload/        │ Asistencia ya procesada                 │
+├──────────────────────────────┼─────────────────────────────────────────┤
+│ GET /api/att/manual-log/     │ Marcaciones manuales                    │
+└──────────────────────────────┴─────────────────────────────────────────┘
+
+Tu marcacionService podría hacer un GET /api/iclock/transaction/ con filtros de fecha en vez de depender de un upload manual.
+
+Opción B — Conectarte directo al biométrico (sin UTimeMaster)
+
+Para esto existen librerías open source que hablan el protocolo ZKTeco directamente:
+
+Node.js (ideal para tu backend):
+- node-zklib — la más usada, comunicación TCP al puerto 4370
+- zkteco-device — alternativa más reciente
+
+Lo que puedes hacer:
+// Concepto - tu backend Node.js
+import ZKLib from 'node-zklib'
+
+const zk = new ZKLib('192.168.x.x', 4370, 10000, 4000)
+await zk.createSocket()
+const { data: attendances } = await zk.getAttendances()
+// attendances: [{ deviceUserId, attTime, verifyMethod }]
+
+---
+Lo que necesitas saber del dispositivo físico
+
+Para cualquiera de las dos opciones necesitas:
+1. IP del dispositivo — está en la red local (revisa la pantalla del biométrico o el router)
+2. Puerto — 4370 TCP por defecto en ZKTeco
+3. Contraseña del dispositivo — usualmente 0000 o vacía si nunca fue cambiada
+4. Modelo exacto — para saber qué comandos soporta (ZK100, ZK200, iClock series, etc.)
+
+---
+Mi recomendación para el corto plazo
+
+Empieza con Opción A — consultar la API de UTimeMaster que ya está corriendo. Es la ruta de menor riesgo y cero configuración adicional. El endpoint GET /api/iclock/transaction/?start_time=FECHA&end_time=FECHA te daría 
+las marcaciones directamente en tu backend, reemplazando el upload manual de Excel que tienes ahora.
+
+Para el largo plazo, cuando quieras independizarte de UTimeMaster, implementamos un servicio Node.js con node-zklib que se conecta directo al dispositivo y sincroniza a tu BD SQLite.
+
+ Basado en el protocolo TCP de ZKTeco (puerto 4370) y las librerías open source, estas son todas las acciones disponibles:
+
+  ---                                                                                                                                                                                                                          Lectura de datos
+                                                                                                                                                                                                                             
+  ┌──────────────────────┬─────────────────────────────────────────────────────────────────────────────────────┐
+  │        Acción        │                                       Detalle                                       │
+  ├──────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ getAttendances()     │ Todos los registros de marcación (fecha, hora, usuario, tipo: entrada/salida/break) │
+  ├──────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ getUsers()           │ Lista de usuarios enrolados (ID, nombre, cédula, rol, contraseña)                   │
+  ├──────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ getTime()            │ Hora actual del dispositivo                                                         │
+  ├──────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ getFirmwareVersion() │ Versión del firmware                                                                │
+  ├──────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ getSerialNumber()    │ Número de serie del dispositivo                                                     │
+  ├──────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ getDeviceInfo()      │ Modelo, capacidades, contadores                                                     │
+  └──────────────────────┴─────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  Gestión de usuarios
+
+  ┌──────────────────────┬────────────────────────────────────────────────────────────┐
+  │        Acción        │                          Detalle                           │
+  ├──────────────────────┼────────────────────────────────────────────────────────────┤
+  │ createOrUpdateUser() │ Crear usuario en el biométrico (sincronizar desde tu HRIS) │
+  ├──────────────────────┼────────────────────────────────────────────────────────────┤
+  │ deleteUser(uid)      │ Eliminar usuario (cuando se da de baja un empleado)        │
+  ├──────────────────────┼────────────────────────────────────────────────────────────┤
+  │ setUserPassword()    │ Asignar PIN de acceso                                      │
+  ├──────────────────────┼────────────────────────────────────────────────────────────┤
+  │ enrollUser()         │ Enrolar huella/rostro remotamente (limitado por modelo)    │
+  └──────────────────────┴────────────────────────────────────────────────────────────┘
+
+  ---
+  Control del dispositivo
+
+  ┌──────────────────────────────────┬───────────────────────────────────────────────────────┐
+  │              Acción              │                        Detalle                        │
+  ├──────────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ clearAttendanceLog()             │ Borrar registros ya sincronizados                     │
+  ├──────────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ disableDevice() / enableDevice() │ Bloquear/desbloquear el lector                        │
+  ├──────────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ powerOff() / restart()           │ Apagar o reiniciar                                    │
+  ├──────────────────────────────────┼───────────────────────────────────────────────────────┤
+  │ setTime(date)                    │ Sincronizar la hora (importante para evitar desfases) │
+  └──────────────────────────────────┴───────────────────────────────────────────────────────┘
+
+  ---
+  Lo más valioso para tu HRIS
+
+  El flujo ideal que podrías implementar sería:
+
+  1. Cada X minutos → tu backend se conecta al biométrico
+  2. Descarga marcaciones nuevas (desde última sincronización)
+  3. Las guarda en tu BD SQLite
+  4. Borra los registros del biométrico (para no reprocesar)
+  5. Tu módulo de Asistencia los muestra en tiempo real
+
+  Y en sentido inverso:
+  1. Creas un empleado en tu HRIS
+  2. Tu backend lo crea automáticamente en el biométrico
+  3. El empleado puede marcar sin configuración manual
+
+  ---
+  Limitaciones importantes
+
+  - Huellas y plantillas faciales — no se pueden leer/escribir por TCP en la mayoría de modelos (solo por USB con el SDK oficial). Solo puedes leer quién marcó y cuándo.
+  - Modelo del dispositivo — no todos los ZKTeco soportan todos los comandos. Los modelos más antiguos tienen capacidades reducidas.
+  - Un socket a la vez — el dispositivo solo acepta una conexión TCP simultánea. Si UTimeMaster ya está conectado, deberías desconectarlo o usar su API en su lugar.
+  - Sin HTTPS — la comunicación es TCP plano, sin cifrado.

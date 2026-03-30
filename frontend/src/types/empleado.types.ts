@@ -29,7 +29,7 @@ export interface Empleado {
   contratoActual?: string
   contratoActualId?: string
   contractEndDate?: string
-  status: 'active' | 'inactive' | 'on_leave' | 'terminated'
+  status: 'active' | 'inactive'
   baseSalary: number
   bankAccount?: string
   bankName?: string
@@ -39,6 +39,8 @@ export interface Empleado {
   especialidad?: string
   afiliacion?: string
   afiliacionId?: string
+  mayordomoId?: string | null
+  mayordomoName?: string
   terminationDate?: string
   terminationReason?: string
   createdAt?: string
@@ -81,7 +83,8 @@ export interface EmpleadoFormData {
   contratoTipoId?: string
   contratoActual?: string
   contratoActualId?: string
-  status?: 'active' | 'inactive' | 'on_leave' | 'terminated'
+  contractEndDate?: string
+  status?: 'active' | 'inactive'
   direccion?: string
   dateOfBirth?: string
   estadoCivil?: string

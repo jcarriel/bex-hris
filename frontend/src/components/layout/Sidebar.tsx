@@ -1,12 +1,16 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Users, DollarSign, Clock, UserPlus,
-  GraduationCap, Gift, Star, BarChart2, Settings, ChevronDown, Upload, Table2, UserCog, LogOut, CalendarDays, CheckSquare, Briefcase, Heart,
-  ChevronLeft, ChevronRight,
+  LayoutDashboard, Users, DollarSign, Clock,
+  GraduationCap, Gift, Star, BarChart2, Settings, Upload, Table2, UserCog, LogOut, CalendarDays, CheckSquare, Briefcase, Heart, Package, HardHat,
+  ChevronLeft, ChevronRight, Fingerprint,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { cn, getInitials } from '@/lib/utils'
 import { useAuthStore, hasModuleAccess } from '@/store/authStore'
 import { useUiStore } from '@/store/uiStore'
+import { leavesService } from '@/services/leaves.service'
+import { novedadesService } from '@/services/novedades.service'
+import { tasksService } from '@/services/tasks.service'
 
 interface NavItem {
   label: string
@@ -29,6 +33,8 @@ const moduleItems: NavItem[] = [
   { label: 'Tareas',               icon: CheckSquare,  to: '/tareas',      module: 'tareas' },
   { label: 'Fuerza Laboral',       icon: Briefcase,    to: '/fuerza-laboral', module: 'fuerza-laboral' },
   { label: 'Bienestar',            icon: Heart,        to: '/bienestar',      module: 'bienestar' },
+  { label: 'Casilleros',           icon: Package,      to: '/casilleros',     module: 'casilleros' },
+  { label: 'Mayordomos',           icon: HardHat,      to: '/mayordomos',     module: 'mayordomos' },
 ]
 
 const comingItems: NavItem[] = [
@@ -39,7 +45,8 @@ const comingItems: NavItem[] = [
 ]
 
 const toolsItems: NavItem[] = [
-  { label: 'Carga Masiva', icon: Upload, to: '/carga-masiva', module: 'carga-masiva' },
+  { label: 'Carga Masiva', icon: Upload,      to: '/carga-masiva', module: 'carga-masiva' },
+  { label: 'Biométrico',   icon: Fingerprint, to: '/biometrico',   module: 'admin', badge: { value: 'beta', color: 'blue' } },
 ]
 
 const systemItems: NavItem[] = [
@@ -70,15 +77,20 @@ function NavItemRow({
   permissions,
   rol,
   collapsed,
+  dynamicBadge,
 }: {
   item: NavItem
   permissions: string[] | undefined
   rol?: string
   collapsed: boolean
+  dynamicBadge?: number
 }) {
   const Icon = item.icon
 
   if (item.module && !hasModuleAccess(permissions, item.module, rol)) return null
+
+  const badgeValue = dynamicBadge ?? (item.badge ? Number(item.badge.value) : 0)
+  const showBadge  = badgeValue > 0
 
   if (item.disabled) {
     return (
@@ -114,18 +126,18 @@ function NavItemRow({
           {isActive && (
             <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[var(--accent)]" />
           )}
-          <Icon size={16} className="flex-shrink-0" />
+          <div className="relative flex-shrink-0">
+            <Icon size={16} />
+            {collapsed && showBadge && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+            )}
+          </div>
           {!collapsed && (
             <>
               <span className="text-sm flex-1 font-medium">{item.label}</span>
-              {item.badge && (
-                <span
-                  className={cn(
-                    'text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
-                    badgeColors[item.badge.color],
-                  )}
-                >
-                  {item.badge.value}
+              {showBadge && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center bg-red-500 text-white">
+                  {badgeValue > 99 ? '99+' : badgeValue}
                 </span>
               )}
             </>
@@ -144,6 +156,29 @@ export function Sidebar() {
   const permissions   = user?.permissions
   const rol           = user?.rol
   const navigate      = useNavigate()
+
+  // Badge counts
+  const { data: allLeaves = [] } = useQuery({
+    queryKey: ['leaves'],
+    queryFn: leavesService.getAll,
+    staleTime: 60_000,
+    select: (d) => d.filter((l: any) => l.status === 'pending'),
+  })
+  const { data: allNovedades = [] } = useQuery({
+    queryKey: ['novedades'],
+    queryFn: novedadesService.getAll,
+    staleTime: 60_000,
+    select: (d) => d.filter((n: any) => n.status === 'pending'),
+  })
+  const { data: myTasks = [] } = useQuery({
+    queryKey: ['my-tasks-dash'],
+    queryFn: tasksService.getMyTasks,
+    staleTime: 60_000,
+    select: (d: any[]) => d.filter((t) => t.status !== 'completed' && t.status !== 'rejected'),
+  })
+
+  const bienestarCount = (allLeaves as any[]).length + (allNovedades as any[]).length
+  const tareasCount    = (myTasks as any[]).length
 
   const collapsed = !sidebarOpen
 
@@ -192,17 +227,27 @@ export function Sidebar() {
 
         <SectionLabel label="Módulos" collapsed={collapsed} />
         {moduleItems.map((item) => (
-          <NavItemRow key={item.to} item={item} permissions={permissions} rol={rol} collapsed={collapsed} />
+          <NavItemRow
+            key={item.to}
+            item={item}
+            permissions={permissions}
+            rol={rol}
+            collapsed={collapsed}
+            dynamicBadge={
+              item.to === '/bienestar' ? bienestarCount :
+              item.to === '/tareas'   ? tareasCount    : undefined
+            }
+          />
         ))}
 
         <SectionLabel label="Herramientas" collapsed={collapsed} />
         {toolsItems.map((item) => (
-          <NavItemRow key={item.to} item={item} permissions={permissions} rol={rol} collapsed={collapsed} />
+          <NavItemRow key={item.to} item={item} permissions={permissions} rol={rol} collapsed={collapsed} dynamicBadge={undefined} />
         ))}
 
         <SectionLabel label="Sistema" collapsed={collapsed} />
         {systemItems.map((item) => (
-          <NavItemRow key={item.to} item={item} permissions={permissions} rol={rol} collapsed={collapsed} />
+          <NavItemRow key={item.to} item={item} permissions={permissions} rol={rol} collapsed={collapsed} dynamicBadge={undefined} />
         ))}
       </nav>
 

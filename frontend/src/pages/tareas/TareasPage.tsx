@@ -6,7 +6,7 @@ import {
   UserCheck, Trash2, RefreshCw, XCircle, Loader2,
 } from 'lucide-react'
 import { cn, getInitials } from '@/lib/utils'
-import { useAuthStore } from '@/store/authStore'
+import { useAuthStore, hasAction } from '@/store/authStore'
 import { tasksService, Task, TaskStatus, TaskPriority } from '@/services/tasks.service'
 import { api } from '@/services/api'
 
@@ -196,8 +196,8 @@ function TaskForm({ users, onSave, onClose, isPending }: {
 }
 
 // ─── Task Detail Panel ─────────────────────────────────────────────────────────
-function TaskDetailPanel({ task, users, currentUserId, isAdmin, onClose, onRefresh }: {
-  task: Task; users: UserOption[]; currentUserId: string; isAdmin: boolean; onClose: () => void; onRefresh: () => void;
+function TaskDetailPanel({ task, users, currentUserId, isAdmin, canDeletePerm, onClose, onRefresh }: {
+  task: Task; users: UserOption[]; currentUserId: string; isAdmin: boolean; canDeletePerm: boolean; onClose: () => void; onRefresh: () => void;
 }) {
   const qc = useQueryClient()
   const cfg   = STATUS_CONFIG[task.status]
@@ -213,7 +213,7 @@ function TaskDetailPanel({ task, users, currentUserId, isAdmin, onClose, onRefre
   const isCreator  = task.createdBy  === currentUserId
   const isAssignee = task.assignedTo === currentUserId
   const canAct     = isAssignee || isAdmin  // status changes
-  const canDelete  = isCreator  || isAdmin
+  const canDelete  = (isCreator || isAdmin) && canDeletePerm
   const canReassign= isCreator  || isAdmin
   const transitions = canAct ? (ASSIGNEE_TRANSITIONS[task.status] ?? []) : []
 
@@ -510,6 +510,8 @@ export function TareasPage() {
   const user    = useAuthStore((s) => s.user)
   const qc      = useQueryClient()
   const isAdmin = user?.rol === 'admin'
+  const canCreate = hasAction(user?.permissions, 'tareas:crear', user?.rol)
+  const canDelete = hasAction(user?.permissions, 'tareas:eliminar', user?.rol)
   const [showForm, setShowForm]       = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [filter, setFilter]           = useState<'all' | 'mine'>('mine')
@@ -574,10 +576,12 @@ export function TareasPage() {
           <input type="text" value={searchQ} onChange={(e) => setSearchQ(e.target.value)}
             placeholder="Buscar..."
             className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-1)] outline-none focus:border-[var(--accent)] w-36" />
-          <button onClick={() => setShowForm(true)} disabled={createTask.isPending}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-60">
-            <Plus size={13} /> Nueva tarea
-          </button>
+          {canCreate && (
+            <button onClick={() => setShowForm(true)} disabled={createTask.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-60">
+              <Plus size={13} /> Nueva tarea
+            </button>
+          )}
         </div>
       </div>
 
@@ -644,6 +648,7 @@ export function TareasPage() {
           users={users}
           currentUserId={user?.id || ''}
           isAdmin={isAdmin}
+          canDeletePerm={canDelete}
           onClose={() => setSelectedTask(null)}
           onRefresh={handleRefresh}
         />

@@ -2,10 +2,21 @@ import { api } from './api'
 
 export interface DashboardStats {
   totalEmployees: number
+  statusBreakdown: { active: number; inactive: number; }
   newThisMonth: number
   pendingLeaves: number
+  pendingNovedades: number
   payrollSum: number
   expiringContracts: number
+  expiringContractsList: {
+    id: string
+    firstName: string
+    lastName: string
+    positionName: string
+    departmentName: string
+    daysAway: number
+    contractEndDate: string | null
+  }[]
   byDepartment: { name: string; value: number }[]
   recentEmployees: {
     id: string

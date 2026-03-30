@@ -95,7 +95,6 @@ export class AuthService {
           email: user.email,
           role: userRole,
           roleId: userRoleId,
-          employeeId: (user as any).employeeId || null,
           permissions,
         },
       };

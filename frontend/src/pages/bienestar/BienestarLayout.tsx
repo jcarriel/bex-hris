@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Palmtree, FileCheck, Heart } from 'lucide-react'
+import { Palmtree, FileCheck, Heart, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const tabs = [
-  { to: '/bienestar/vacaciones', label: 'Vacaciones', icon: Palmtree },
-  { to: '/bienestar/permisos',   label: 'Permisos',   icon: FileCheck },
+  { to: '/bienestar/vacaciones',     label: 'Vacaciones',     icon: Palmtree },
+  { to: '/bienestar/permisos',       label: 'Permisos',       icon: FileCheck },
   { to: '/bienestar/trabajo-social', label: 'Trabajo Social', icon: Heart },
+  { to: '/bienestar/novedades',      label: 'Novedades',      icon: MessageSquare },
 ]
 
 export function BienestarLayout() {

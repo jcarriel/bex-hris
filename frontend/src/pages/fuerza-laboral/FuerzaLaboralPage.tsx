@@ -18,6 +18,8 @@ import {
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/empleados/ConfirmDialog'
+import { useAuthStore, hasAction } from '@/store/authStore'
 
 // ─── Default data ─────────────────────────────────────────────────────────────
 
@@ -696,7 +698,7 @@ function ReportePorLabor({ data, cajas, maps, hasMarcacion }: { data: WorkforceD
 
 // ─── Report card ──────────────────────────────────────────────────────────────
 
-function ReportCard({ report, onView, onDelete }: { report: WorkforceReport; onView: () => void; onDelete: () => void }) {
+function ReportCard({ report, onView, onDelete }: { report: WorkforceReport; onView: () => void; onDelete?: () => void }) {
   const totalPlan = report.data?.labors.reduce((s, l) => s + l.counts.reduce((a, b) => a + b, 0), 0) ?? 0
   const sectors   = report.data?.sectors.length ?? 0
 
@@ -711,7 +713,7 @@ function ReportCard({ report, onView, onDelete }: { report: WorkforceReport; onV
         </div>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
           <button onClick={onView} className="p-1.5 rounded-lg hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] transition-colors"><Edit2 size={13} /></button>
-          <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors"><Trash2 size={13} /></button>
+          {onDelete && <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors"><Trash2 size={13} /></button>}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -783,9 +785,13 @@ type View = 'list' | 'editor' | 'report'
 
 export function FuerzaLaboralPage() {
   const qc = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+  const canCreate  = hasAction(user?.permissions, 'fuerza-laboral:crear', user?.rol)
+  const canDelete  = hasAction(user?.permissions, 'fuerza-laboral:eliminar', user?.rol)
   const [view, setView]             = useState<View>('list')
   const [filterYear, setFilterYear] = useState<number | ''>('')
   const [editor, setEditor]         = useState<EditorState>(emptyEditor)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [fullReport, setFullReport] = useState<WorkforceReport | null>(null)
   const [activeTab, setActiveTab]   = useState<'grid' | 'zona' | 'labor'>('grid')
 
@@ -874,9 +880,11 @@ export function FuerzaLaboralPage() {
               {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <button onClick={() => refetch()} className="p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors"><RefreshCw size={14} /></button>
-            <button onClick={() => { setEditor(emptyEditor()); setView('editor') }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 text-sm font-medium">
-              <Plus size={15} /> Nuevo Reporte
-            </button>
+            {canCreate && (
+              <button onClick={() => { setEditor(emptyEditor()); setView('editor') }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 text-sm font-medium">
+                <Plus size={15} /> Nuevo Reporte
+              </button>
+            )}
           </div>
         </div>
         {isLoading ? (
@@ -884,13 +892,24 @@ export function FuerzaLaboralPage() {
         ) : reports.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-[var(--text-3)]">
             <Briefcase size={40} className="mb-3 opacity-30" /><div className="font-medium">No hay reportes aún</div>
-            <button onClick={() => { setEditor(emptyEditor()); setView('editor') }} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90"><Plus size={14} />Nuevo Reporte</button>
+            {canCreate && (
+              <button onClick={() => { setEditor(emptyEditor()); setView('editor') }} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90"><Plus size={14} />Nuevo Reporte</button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {reports.map((r) => <ReportCard key={r.id} report={r} onView={() => handleView(r)} onDelete={() => { if (confirm('¿Eliminar?')) deleteM.mutate(r.id) }} />)}
+            {reports.map((r) => <ReportCard key={r.id} report={r} onView={() => handleView(r)} onDelete={canDelete ? () => setConfirmDelete(r.id) : undefined} />)}
           </div>
         )}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Eliminar reporte"
+        description="¿Estás seguro de que deseas eliminar este reporte? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        loading={deleteM.isPending}
+        onConfirm={() => { deleteM.mutate(confirmDelete!); setConfirmDelete(null) }}
+        onCancel={() => setConfirmDelete(null)}
+      />
       </div>
     )
   }

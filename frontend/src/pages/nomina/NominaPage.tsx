@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react'
+import { useAuthStore, hasAction } from '@/store/authStore'
+import { useMayordomoScope } from '@/hooks/useMayordomoScope'
 import { toast } from 'sonner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -66,7 +68,9 @@ const PAGE_SIZE = 15
 
 /* ─── PDF generator ─────────────────────────────────────────────── */
 
-function buildRolHtml(r: PayrollRecord): string {
+interface CompanySettings { name: string; address: string; ruc: string }
+
+function buildRolHtml(r: PayrollRecord, company: CompanySettings = { name: COMPANY_NAME, address: 'SEGUNDA OESTE 205A Y AV PRINC / SAMBORONDON', ruc: '0992989464001' }): string {
   const monthName = MONTHS[r.month - 1]
   const t         = calcTotals(r)
 
@@ -104,10 +108,10 @@ function buildRolHtml(r: PayrollRecord): string {
     <div class="container">
       <div class="header">
         <div class="company-info">
-          <div class="company-name">${COMPANY_NAME}</div>
+          <div class="company-name">${company.name}</div>
           <div class="company-details">
-            SEGUNDA OESTE 205A Y AV PRINC / SAMBORONDON<br>
-            RUC: 0992989464001
+            ${company.address}<br>
+            RUC: ${company.ruc}
           </div>
         </div>
       </div>
@@ -191,7 +195,7 @@ body { font-family: 'Arial', sans-serif; color: #333; background: white; }
 .signature-name { font-size: 11px; color: #000; margin-top: 2px; }
 `
 
-async function exportPdf(records: PayrollRecord[], filename: string) {
+async function exportPdf(records: PayrollRecord[], filename: string, company?: CompanySettings) {
   if (!records.length) return
 
   const pdf  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
@@ -209,7 +213,7 @@ async function exportPdf(records: PayrollRecord[], filename: string) {
     try {
       const doc = iframe.contentDocument!
       doc.open()
-      doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${PDF_STYLES}</style></head><body>${buildRolHtml(r)}</body></html>`)
+      doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${PDF_STYLES}</style></head><body>${buildRolHtml(r, company)}</body></html>`)
       doc.close()
 
       // Wait for iframe to layout
@@ -529,6 +533,9 @@ function AttendanceImportModal({
 
 export function NominaPage() {
   const qc = useQueryClient()
+  const user      = useAuthStore((s) => s.user)
+  const canDelete = hasAction(user?.permissions, 'nomina:eliminar', user?.rol)
+  const { filterByEmployeeId } = useMayordomoScope('nomina')
 
   const currentYear  = new Date().getFullYear()
   const currentMonth = new Date().getMonth() + 1
@@ -547,6 +554,14 @@ export function NominaPage() {
   const [exporting,         setExporting]         = useState(false)
   const [showAttImport,     setShowAttImport]     = useState(false)
   const [importedHours,     setImportedHours]     = useState<Map<string, AttendanceRow>>(new Map())
+
+  /* Load company settings */
+  const { data: companySettingsRaw } = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: () => import('@/services/api').then(m => m.api.get<{ success: boolean; data: any }>('/settings/company').then(r => r.data.data)),
+    staleTime: 300_000,
+  })
+  const companySettings = companySettingsRaw ?? { name: COMPANY_NAME, address: 'SEGUNDA OESTE 205A Y AV PRINC / SAMBORONDON', ruc: '0992989464001' }
 
   /* Load departments for id→name resolution */
   const { data: departments = [] } = useQuery({
@@ -572,8 +587,8 @@ export function NominaPage() {
 
   /* Records for selected period */
   const periodRecords = useMemo(
-    () => all.filter((r) => r.year === selYear && r.month === selMonth),
-    [all, selYear, selMonth],
+    () => filterByEmployeeId(all.filter((r) => r.year === selYear && r.month === selMonth)),
+    [all, selYear, selMonth, filterByEmployeeId],
   )
 
   /* Unique filter options derived from period records */
@@ -658,7 +673,7 @@ export function NominaPage() {
       : filtered
     const filename = `Roles_Pago_${MONTHS[selMonth - 1]}_${selYear}.pdf`
     try {
-      await exportPdf(toExport, filename)
+      await exportPdf(toExport, filename, companySettings)
     } finally {
       setExporting(false)
     }
@@ -822,13 +837,15 @@ export function NominaPage() {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => setConfirmPeriod(true)}
-                disabled={periodRecords.length === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors">
-                <Trash2 size={13} />
-                Eliminar período
-              </button>
+              canDelete && (
+                <button
+                  onClick={() => setConfirmPeriod(true)}
+                  disabled={periodRecords.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors">
+                  <Trash2 size={13} />
+                  Eliminar período
+                </button>
+              )
             )}
           </div>
 
@@ -989,12 +1006,14 @@ export function NominaPage() {
                               className="p-1.5 rounded-md text-[var(--text-2)] hover:bg-[var(--bg-hover)] hover:text-[var(--accent)] transition-colors">
                               <Eye size={14} />
                             </button>
-                            <button
-                              onClick={() => setConfirm(row.id)}
-                              title="Eliminar registro"
-                              className="p-1.5 rounded-md text-red-400 hover:bg-red-500/10 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => setConfirm(row.id)}
+                                title="Eliminar registro"
+                                className="p-1.5 rounded-md text-red-400 hover:bg-red-500/10 transition-colors">
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </>

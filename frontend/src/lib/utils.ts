@@ -27,6 +27,18 @@ export function formatDate(dateStr: string): string {
   }).format(new Date(year, month - 1, day))
 }
 
+/**
+ * Formats an ISO datetime string (UTC) to local date + time dd/mm/yyyy HH:MM.
+ * Uses the browser's local timezone so the displayed time matches the user's clock.
+ */
+export function formatDateTime(iso: string): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const date = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${date} ${time}`
+}
+
 export function getInitials(name: string): string {
   return name
     .split(' ')

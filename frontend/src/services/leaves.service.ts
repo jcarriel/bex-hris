@@ -3,13 +3,16 @@ import { api } from './api'
 export interface Leave {
   id: string
   employeeId: string
-  type: 'vacation' | 'medical' | 'maternity' | 'personal' | 'unpaid'
+  type: 'vacation' | 'medical' | 'maternity' | 'personal' | 'ausentismo' | 'permiso' | 'paternidad'
   startDate: string
   endDate: string
   days: number
   status: 'pending' | 'approved' | 'rejected'
   reason?: string
+  submittedBy?: string
+  submittedByName?: string
   approvedBy?: string
+  approvedByName?: string
   approvedDate?: string
   createdAt: string
   updatedAt: string
@@ -25,7 +28,7 @@ export const leavesService = {
   getPending: (): Promise<Leave[]> =>
     api.get<{ success: boolean; data: Leave[] }>('/leaves/pending').then((r) => r.data.data),
 
-  create: (payload: Omit<Leave, 'id' | 'status' | 'approvedBy' | 'approvedDate' | 'createdAt' | 'updatedAt'>): Promise<Leave> =>
+  create: (payload: Omit<Leave, 'id' | 'status' | 'submittedBy' | 'submittedByName' | 'approvedBy' | 'approvedByName' | 'approvedDate' | 'createdAt' | 'updatedAt'>): Promise<Leave> =>
     api.post<{ success: boolean; data: Leave }>('/leaves', payload).then((r) => r.data.data),
 
   approve: (id: string): Promise<Leave> =>

@@ -60,7 +60,19 @@
       "Bash(del:*)",
       "Bash(find /c/Users/Jean/Desktop/Trabajos/bex-hris/backend -type f \\\\\\(-name *migration* -o -name *db* -o -name *.sql \\\\\\))",
       "Bash(find /c/Users/Jean/Desktop/Trabajos/bex-hris/backend -name *.sql -o -name *migration* -o -name *schema*)",
-      "Bash(grep -r \"approvedBy\\\\|salary_history\\\\|employee_history\\\\|position_history\" /c/Users/Jean/Desktop/Trabajos/bex-hris/backend/src --include=*.ts)"
+      "Bash(grep -r \"approvedBy\\\\|salary_history\\\\|employee_history\\\\|position_history\" /c/Users/Jean/Desktop/Trabajos/bex-hris/backend/src --include=*.ts)",
+      "Bash(find C:UsersJeanDesktopTrabajosbex-hrisbackend -type f -name *eave*)",
+      "Bash(du -sh \"C:\\\\Users\\\\Jean\\\\Desktop\\\\UTimeMaster\"/*)",
+      "Bash(grep -r \"biometrico\\\\|biometric\" /c/Users/Jean/Desktop/Trabajos/bex-hris/backend --include=*.ts --include=*.js -l)",
+      "Bash(find /c/Users/Jean/Desktop/Trabajos/bex-hris/backend/src/routes -type f -name *.ts)",
+      "Bash(grep -n \"function EmpleadosTab\\\\|function AusenciasTab\\\\|function RegisterAusenciaModal\\\\|function EmpModal\\\\|function isoWeekToRange\\\\|type Tab\\\\|tab === ''ausencias''\" src/pages/biometrico/BiometricoPage.tsx)",
+      "Bash(find C:UsersJeanDesktopTrabajosbex-hrisbackendsrcconfig -name *.ts)",
+      "Bash(npm uninstall:*)",
+      "Bash(grep:*)",
+      "Bash(pg_isready)",
+      "Bash(psql --version)",
+      "Bash(docker --version)",
+      "Bash(docker run:*)"
     ]
   }
 }

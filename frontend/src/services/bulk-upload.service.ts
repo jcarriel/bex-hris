@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import { api } from './api'
 
-export type BulkUploadType = 'employees' | 'payroll' | 'roles' | 'attendance' | 'marcacion'
+export type BulkUploadType = 'employees' | 'payroll' | 'roles' | 'attendance' | 'marcacion' | 'maestro'
 
 export interface BulkUploadError {
   row: number
@@ -19,12 +19,30 @@ export interface BulkUploadResult {
   consolidatedPayrolls?: unknown[]
 }
 
+// ─── Split "BEJARANO HOLGUIN JEFFERSON GILMAR" → Apellidos + Nombres ──────────
+function splitFullName(full: string): { Apellidos: string; Nombres: string } {
+  const parts = String(full ?? '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { Apellidos: '', Nombres: '' }
+  if (parts.length === 1) return { Apellidos: parts[0], Nombres: '' }
+  if (parts.length === 2) return { Apellidos: parts[0], Nombres: parts[1] }
+  if (parts.length === 3) return { Apellidos: `${parts[0]} ${parts[1]}`, Nombres: parts[2] }
+  // 4+ palabras: primeras 2 = apellidos, resto = nombres
+  return { Apellidos: `${parts[0]} ${parts[1]}`, Nombres: parts.slice(2).join(' ') }
+}
+
 // ─── Column mapping: real Excel names → backend expected names ────────────────
 const EMPLOYEE_COLUMN_MAP: Record<string, string> = {
   'n°': '',                          // skip
   'no.': '',
   'apellidos': 'Apellidos',
   'nombres': 'Nombres',
+  // Columna combinada (varios formatos posibles)
+  'apellidos y nombres':   'ApellidosNombres',
+  'apellidos-nombres':     'ApellidosNombres',
+  'apellidos - nombres':   'ApellidosNombres',
+  'nombre completo':       'ApellidosNombres',
+  'nombres y apellidos':   'ApellidosNombres',
+  'nombres completos':     'ApellidosNombres',
   'cédula': 'Cedula',
   'cedula': 'Cedula',
   'tipo de contrato': 'TipoContrato',
@@ -102,7 +120,7 @@ function parseSueldo(value: unknown): number | string {
 
 // ─── Find header row index (skip title/company rows) ────────────────────────
 function findHeaderRow(rows: unknown[][]): number {
-  const markers = ['apellidos', 'nombres', 'cedula', 'cédula']
+  const markers = ['apellidos', 'nombres', 'cedula', 'cédula', 'apellidos y nombres', 'apellidos-nombres', 'nombre completo']
   for (let i = 0; i < Math.min(rows.length, 6); i++) {
     const row = rows[i] as string[]
     const normalized = row.map((c) => String(c ?? '').toLowerCase().trim())
@@ -156,6 +174,15 @@ async function preprocessEmployeeXlsx(file: File): Promise<File> {
 
         obj[backendKey] = val ?? ''
       })
+
+      // Columna combinada → separar en Apellidos + Nombres
+      if ('ApellidosNombres' in obj) {
+        const { Apellidos, Nombres } = splitFullName(String(obj.ApellidosNombres ?? ''))
+        obj.Apellidos = Apellidos
+        obj.Nombres   = Nombres
+        delete obj.ApellidosNombres
+      }
+
       return obj
     })
 
@@ -180,6 +207,78 @@ function COLUMN_MAP_LOOKUP(key: string): string {
   return EMPLOYEE_COLUMN_MAP[stripped] ?? ''
 }
 
+// ─── Maestro General column map ───────────────────────────────────────────────
+// Handles the duplicate SEMANA columns by position (first = ingreso, second = salida)
+const MAESTRO_SKIP = new Set(['entrega credencial', 'entrega uniforme', 'lockers'])
+
+function mapMaestroHeaders(headers: string[]): string[] {
+  let semanaCount = 0
+  return headers.map((h) => {
+    const key = h.toLowerCase().trim()
+    if (MAESTRO_SKIP.has(key)) return ''
+    if (key === 'semana') {
+      semanaCount++
+      return semanaCount === 1 ? 'SemanaIngreso' : 'SemanaSalida'
+    }
+    const map: Record<string, string> = {
+      'tipo de trabajador': 'TipoTrabajador',
+      'fecha ingreso':      'FechaIngreso',
+      'trabajadores':       'Trabajadores',
+      'cedula':             'Cedula',
+      'cédula':             'Cedula',
+      'centro de costo':    'CentroDeCosto',
+      'labor':              'Labor',
+      'fecha nacimiento':   'FechaNacimiento',
+      'fecha de nacimiento':'FechaNacimiento',
+      'titulo de bachiller':'TituloBachiller',
+      'título de bachiller':'TituloBachiller',
+      'fecha de salida':    'FechaSalida',
+      'estado':             'Estado',
+    }
+    return map[key] ?? ''
+  })
+}
+
+async function preprocessMaestroXlsx(file: File): Promise<File> {
+  const buffer = await file.arrayBuffer()
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false })
+  const ws = findSheet(wb, 'TRABAJ')
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][]
+
+  const headerRowIndex = findHeaderRow(raw)
+  const originalHeaders = (raw[headerRowIndex] as string[]).map((h) => String(h ?? '').trim())
+  const mappedHeaders = mapMaestroHeaders(originalHeaders)
+  const dataRows = raw.slice(headerRowIndex + 1)
+
+  const processed: Record<string, unknown>[] = dataRows
+    .filter((row) => (row as unknown[]).some((c) => c !== '' && c != null))
+    .map((row) => {
+      const obj: Record<string, unknown> = {}
+      mappedHeaders.forEach((backendKey, i) => {
+        if (!backendKey) return
+        let val = (row as unknown[])[i]
+        if (backendKey === 'FechaIngreso' || backendKey === 'FechaNacimiento' || backendKey === 'FechaSalida') {
+          val = normalizeDate(val)
+        }
+        obj[backendKey] = val ?? ''
+      })
+      // Split full name TRABAJADORES → Apellidos + Nombres
+      if ('Trabajadores' in obj) {
+        const { Apellidos, Nombres } = splitFullName(String(obj.Trabajadores ?? ''))
+        obj.Apellidos = Apellidos
+        obj.Nombres   = Nombres
+        delete obj.Trabajadores
+      }
+      return obj
+    })
+
+  const newWb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(newWb, XLSX.utils.json_to_sheet(processed), 'Maestro')
+  const outBuffer = XLSX.write(newWb, { type: 'array', bookType: 'xlsx' })
+  const blob = new Blob([outBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  return new File([blob], file.name, { type: blob.type })
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 export const bulkUploadService = {
   upload: async (
@@ -189,9 +288,11 @@ export const bulkUploadService = {
   ): Promise<BulkUploadResult> => {
     let fileToUpload = file
 
-    // Preprocess employee Excel to normalize column names/formats
+    // Preprocess Excel to normalize column names/formats
     if (type === 'employees') {
       fileToUpload = await preprocessEmployeeXlsx(file)
+    } else if (type === 'maestro') {
+      fileToUpload = await preprocessMaestroXlsx(file)
     }
 
     const form = new FormData()
@@ -237,6 +338,7 @@ export const TEMPLATES = {
     ],
     notes: [
       'La primera fila puede ser el nombre de la empresa (se detecta y omite automáticamente)',
+      'Nombre: acepta columnas separadas (Apellidos / Nombres) o una combinada (ej. "Apellidos y Nombres" → BEJARANO HOLGUIN JEFFERSON GILMAR — primeras 2 palabras = apellidos, resto = nombres)',
       'Cédula requerida: se normaliza automáticamente (9 dígitos → se agrega 0 al inicio)',
       'Sueldo acepta formato "$  461,62" o "45000" — se parsea automáticamente',
       'Estado Civil: SOLTERO | CASADO | DIVORCIADO | VIUDO',
@@ -276,24 +378,52 @@ export const TEMPLATES = {
       'CEDULA debe coincidir con el registro del empleado en el sistema',
     ],
   },
+  maestro: {
+    label: 'Maestro General',
+    ext: 'xlsx',
+    mimeType: XLSX_MIME,
+    sheetName: 'Maestro',
+    columns: [
+      'TIPO DE TRABAJADOR', 'FECHA INGRESO', 'SEMANA',
+      'TRABAJADORES', 'CEDULA', 'CENTRO DE COSTO', 'LABOR',
+      'FECHA NACIMIENTO', 'TITULO DE BACHILLER', 'SEMANA',
+      'FECHA DE SALIDA', 'ESTADO',
+    ],
+    example: [
+      'AFILIADO', '1/2/2024', 5,
+      'BEJARANO HOLGUIN JEFFERSON GILMAR', '0958857393', 'ZONA 1', 'SELECTOR',
+      '19/4/1990', 'CIENCIAS', 52,
+      '', 'ACTIVO',
+    ],
+    notes: [
+      'Las columnas ENTREGA CREDENCIAL, ENTREGA UNIFORME y LOCKERS se ignoran automáticamente',
+      'TRABAJADORES: formato "APELLIDO1 APELLIDO2 NOMBRE1 NOMBRE2" — las primeras 2 palabras son apellidos, el resto nombres',
+      'SEMANA aparece dos veces: la primera es semana de ingreso, la segunda es semana de salida',
+      'ESTADO: ACTIVO | INACTIVO',
+      'Se actualiza el registro si la cédula ya existe',
+    ],
+  },
   marcacion: {
     label: 'Asistencia / Marcación',
     ext: 'xlsx',
     mimeType: XLSX_MIME,
     sheetName: 'Marcacion',
     columns: [
-      'No.', 'Id del Empleado', 'Nombres', 'Departamento', 'Mes',
+      'No.', 'Id del Empleado', 'Nombres', 'Departamento',
       'Fecha', 'Asistencia Diaria', 'Primera Marcación', 'Última Marcación', 'Tiempo Total',
+      'IN Temp', 'OUT Temp',
     ],
     example: [
-      1, '001-0000001-0', 'GARCÍA JUAN CARLOS', 'Tecnología', 3,
-      '01-03-2024', 'Presente', '08:00', '17:00', '09:00:00',
+      1, '1027311301', 'GARCÍA JUAN CARLOS', 'Tecnología',
+      '01-03-2024', 'Lunes', '08:00', '17:00', '09:00:00',
+      '0.00', '0.00',
     ],
     notes: [
-      'Campos requeridos: Id del Empleado (cédula), Nombres, Fecha',
-      'Fecha en formato DD-MM-YYYY',
+      'El archivo puede tener filas de encabezado antes de los datos — se detectan automáticamente',
+      'Campos requeridos: No., Id del Empleado (cédula), Nombres, Fecha',
+      'Fecha en formato DD-MM-YYYY (el mes se deriva de la fecha)',
       'Si ya existe registro para esa cédula+fecha, se reemplaza',
-      'Empleados no encontrados quedan como registros pendientes',
+      'Las columnas IN Temp y OUT Temp se ignoran durante la importación',
     ],
   },
 } as const
@@ -333,17 +463,27 @@ export async function readXlsxPreview(
   sheetKeyword?: string,
 ): Promise<{ headers: string[]; rows: (string | number | boolean)[][]; skippedRows: number }> {
   const buffer = await file.arrayBuffer()
-  const wb = XLSX.read(buffer, { type: 'array' })
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
   const ws = sheetKeyword ? findSheet(wb, sheetKeyword) : wb.Sheets[wb.SheetNames[0]]
 
-  const raw = XLSX.utils.sheet_to_json<(string | number | boolean)[]>(ws, {
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, {
     header: 1,
     defval: '',
-  }) as (string | number | boolean)[][]
+  }) as unknown[][]
 
-  const headerRowIndex = findHeaderRow(raw as unknown[][])
-  const headers = (raw[headerRowIndex] ?? []) as string[]
-  const rows = raw.slice(headerRowIndex + 1, headerRowIndex + 1 + maxRows)
+  // Convert Date objects to dd/mm/yyyy strings for display
+  const formatCell = (v: unknown): string | number | boolean => {
+    if (v instanceof Date) {
+      return `${String(v.getDate()).padStart(2,'0')}/${String(v.getMonth()+1).padStart(2,'0')}/${v.getFullYear()}`
+    }
+    return v as string | number | boolean
+  }
+
+  const headerRowIndex = findHeaderRow(raw)
+  const headers = ((raw[headerRowIndex] ?? []) as unknown[]).map((h) => String(h ?? ''))
+  const rows = raw
+    .slice(headerRowIndex + 1, headerRowIndex + 1 + maxRows)
+    .map((row) => (row as unknown[]).map(formatCell))
 
   return { headers, rows, skippedRows: headerRowIndex }
 }

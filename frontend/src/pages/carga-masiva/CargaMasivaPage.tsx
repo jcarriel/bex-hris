@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Upload, Download, FileSpreadsheet, CheckCircle2,
   XCircle, AlertTriangle, ChevronRight, Loader2, X,
@@ -216,21 +217,36 @@ function Dropzone({ file, onFile, onClear }: DropzoneProps) {
 const EMPLOYEE_SKIP_COLS = new Set(['n°', 'no.'])
 
 // ─── XLSX Preview ─────────────────────────────────────────────────────────────
-function XlsxPreview({ file, tabKey }: { file: File; tabKey: TemplateName }) {
+function XlsxPreview({ file, tabKey, onParsingChange }: {
+  file: File
+  tabKey: TemplateName
+  onParsingChange: (parsing: boolean) => void
+}) {
   const [preview, setPreview] = useState<{ headers: string[]; rows: (string | number | boolean)[][]; skippedRows: number } | null>(null)
   const [loaded, setLoaded]   = useState(false)
 
   useEffect(() => {
     setLoaded(false)
     setPreview(null)
-    readXlsxPreview(file, 8, tabKey === 'employees' ? 'trabajadores' : undefined).then((data) => {
+    onParsingChange(true)
+    const sheetKeyword = tabKey === 'employees' ? 'trabajadores' : tabKey === 'maestro' ? 'TRABAJ' : undefined
+    readXlsxPreview(file, 8, sheetKeyword).then((data) => {
       setPreview(data)
       setLoaded(true)
-    }).catch(() => setLoaded(true))
+      onParsingChange(false)
+    }).catch(() => { setLoaded(true); onParsingChange(false) })
   }, [file])
 
-  if (!loaded || !preview) return null
-  if (!preview.headers.length) return null
+  if (!loaded) {
+    return (
+      <div className="flex items-center gap-3 py-6 px-4 rounded-lg border" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
+        <Loader2 size={16} className="animate-spin text-[var(--accent)] shrink-0" />
+        <span className="text-sm text-[var(--text-3)]">Procesando archivo, por favor espere...</span>
+      </div>
+    )
+  }
+
+  if (!preview || !preview.headers.length) return null
 
   // Build list of visible column indices (filter skipped cols for employees)
   const visibleCols = preview.headers
@@ -285,12 +301,14 @@ function XlsxPreview({ file, tabKey }: { file: File; tabKey: TemplateName }) {
 // ─── Upload tab ───────────────────────────────────────────────────────────────
 function UploadTab({ tabKey }: { tabKey: TemplateName }) {
   const tmpl = TEMPLATES[tabKey]
+  const qc = useQueryClient()
 
-  const [file, setFile]       = useState<File | null>(null)
-  const [status, setStatus]   = useState<'active' | 'inactive'>('active')
-  const [loading, setLoading] = useState(false)
-  const [result, setResult]   = useState<BulkUploadResult | null>(null)
-  const [error, setError]     = useState('')
+  const [file, setFile]         = useState<File | null>(null)
+  const [status, setStatus]     = useState<'active' | 'inactive'>('active')
+  const [loading, setLoading]   = useState(false)
+  const [isParsing, setIsParsing] = useState(false)
+  const [result, setResult]     = useState<BulkUploadResult | null>(null)
+  const [error, setError]       = useState('')
 
   const handleUpload = async () => {
     if (!file) return
@@ -301,6 +319,10 @@ function UploadTab({ tabKey }: { tabKey: TemplateName }) {
       const extra: Record<string, string> = tabKey === 'employees' ? { status } : {}
       const res = await bulkUploadService.upload(tabKey, file, extra)
       setResult(res)
+      if (res.success > 0) {
+        qc.invalidateQueries({ queryKey: ['empleados'] })
+        qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      }
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
       setError(msg ?? 'Error al procesar el archivo')
@@ -383,7 +405,7 @@ function UploadTab({ tabKey }: { tabKey: TemplateName }) {
         <Dropzone file={file} onFile={setFile} onClear={handleClear} />
 
         {/* Preview */}
-        {file && <XlsxPreview file={file} tabKey={tabKey} />}
+        {file && <XlsxPreview file={file} tabKey={tabKey} onParsingChange={setIsParsing} />}
 
         {/* Error */}
         {error && (
@@ -396,7 +418,7 @@ function UploadTab({ tabKey }: { tabKey: TemplateName }) {
         <div className="flex justify-end">
           <button
             onClick={handleUpload}
-            disabled={!file || loading}
+            disabled={!file || loading || isParsing}
             className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
@@ -412,14 +434,44 @@ function UploadTab({ tabKey }: { tabKey: TemplateName }) {
   )
 }
 
+// ─── Employees tab with Artículo 42 / Maestro General sub-tabs ───────────────
+type EmployeesSubTab = 'art42' | 'maestro'
+
+function EmployeesUploadTab() {
+  const [subTab, setSubTab] = useState<EmployeesSubTab>('art42')
+
+  const subTabCls = (active: boolean) => cn(
+    'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+    active
+      ? 'bg-[var(--accent)] text-white shadow-sm'
+      : 'text-[var(--text-2)] hover:text-[var(--text-1)] hover:bg-[var(--bg-hover)]',
+  )
+
+  return (
+    <div>
+      <div
+        className="flex gap-1 p-1 rounded-xl mb-5 w-fit"
+        style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      >
+        <button className={subTabCls(subTab === 'art42')}   onClick={() => setSubTab('art42')}>Artículo 42</button>
+        <button className={subTabCls(subTab === 'maestro')} onClick={() => setSubTab('maestro')}>Maestro General</button>
+      </div>
+
+      {subTab === 'art42'   && <UploadTab key="employees-art42"   tabKey="employees" />}
+
+
+      {subTab === 'maestro' && <UploadTab key="employees-maestro" tabKey="maestro" />}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function CargaMasivaPage() {
   const [activeTab, setActiveTab] = useState<TemplateName>('employees')
 
   return (
     <div>
-
-      {/* Tabs */}
+      {/* Main tabs */}
       <div
         className="flex gap-1 p-1 rounded-xl mb-6 w-fit"
         style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
@@ -441,8 +493,8 @@ export function CargaMasivaPage() {
         ))}
       </div>
 
-      {/* Reset state when tab changes */}
-      <UploadTab key={activeTab} tabKey={activeTab} />
+      {activeTab === 'employees' && <EmployeesUploadTab />}
+      {activeTab !== 'employees' && <UploadTab key={activeTab} tabKey={activeTab} />}
     </div>
   )
 }

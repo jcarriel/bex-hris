@@ -24,6 +24,8 @@ const routeTitles: Record<string, { title: string; crumbs: Crumb[] }> = {
   '/tareas':        { title: 'Tareas',                crumbs: [{ label: 'Módulos' }, { label: 'Tareas', href: '/tareas' }] },
   '/bienestar':     { title: 'Bienestar',             crumbs: [{ label: 'Módulos' }, { label: 'Bienestar', href: '/bienestar' }] },
   '/fuerza-laboral':{ title: 'Fuerza Laboral',        crumbs: [{ label: 'Módulos' }, { label: 'Fuerza Laboral', href: '/fuerza-laboral' }] },
+  '/casilleros':    { title: 'Casilleros',            crumbs: [{ label: 'Módulos' }, { label: 'Casilleros', href: '/casilleros' }] },
+  '/mayordomos':    { title: 'Mayordomos',            crumbs: [{ label: 'Módulos' }, { label: 'Mayordomos', href: '/mayordomos' }] },
 }
 
 const NOTIF_META: Record<string, { icon: string; color: string; nav?: string }> = {
@@ -266,7 +268,7 @@ export function Topbar() {
       {/* Page title */}
       <div className="flex-1 min-w-0">
         <h2 className="text-sm font-semibold text-[var(--text-1)] leading-none">{title}</h2>
-        <p className="text-[11px] text-[var(--text-3)] mt-0.5 flex items-center gap-1">
+        <p className="text-[11px] text-[var(--text-3)] mt-0.5 flex items-center gap-1 flex-wrap">
           {crumbs.map((crumb, i) => (
             <span key={i} className="flex items-center gap-1">
               {i > 0 && <span className="opacity-40">/</span>}
@@ -335,14 +337,24 @@ export function Topbar() {
         {/* Separator */}
         <div className="w-px h-5 mx-1" style={{ backgroundColor: 'var(--border)' }} />
 
-        {/* User avatar — opens preferences */}
+        {/* User avatar + role — opens preferences */}
         <button
           onClick={() => setSettingsOpen(true)}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white hover:opacity-80 transition-opacity ring-2 ring-transparent hover:ring-[var(--accent)] flex-shrink-0"
-          style={{ backgroundColor: avatarColor }}
-          title={`${user?.nombre ?? 'Usuario'} — Preferencias`}
+          className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-[var(--bg-hover)] transition-colors group"
+          title="Preferencias"
         >
-          {avatarContent}
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ring-2 ring-transparent group-hover:ring-[var(--accent)] transition-all"
+            style={{ backgroundColor: avatarColor }}
+          >
+            {avatarContent}
+          </div>
+          <div className="hidden md:block text-left leading-none">
+            <div className="text-xs font-medium text-[var(--text-1)]">{user?.nombre ?? 'Usuario'}</div>
+            <div className="text-[10px] text-[var(--text-3)] capitalize">
+              {user?.rol === 'admin' ? 'Administrador' : (user?.rol ?? 'Usuario')}
+            </div>
+          </div>
         </button>
       </div>
 

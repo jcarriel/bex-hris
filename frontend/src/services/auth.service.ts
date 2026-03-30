@@ -16,6 +16,7 @@ interface LoginResponse {
       email: string
       role: string
       roleId?: string
+      employeeId?: string | null
       permissions: string[]
     }
   }

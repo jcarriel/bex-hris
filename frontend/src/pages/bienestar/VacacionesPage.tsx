@@ -4,16 +4,18 @@ import { leavesService, Leave } from '@/services/leaves.service'
 import { empleadosService } from '@/services/empleados.service'
 import { Plus, Check, X, Trash2, Loader2, Palmtree, AlertTriangle, FileDown, ChevronLeft, ChevronRight, CalendarDays, List } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, formatDateTime } from '@/lib/utils'
 import jsPDF from 'jspdf'
 import { EmployeeSearchSelect } from '@/components/shared/EmployeeSearchSelect'
+import { useAuthStore, hasModuleAccess, hasAction } from '@/store/authStore'
+import { useMayordomoScope } from '@/hooks/useMayordomoScope'
+import { ConfirmDialog } from '@/components/empleados/ConfirmDialog'
 
 const LEAVE_TYPES_LABEL: Record<string, string> = {
   vacation: 'Vacaciones',
   medical: 'Médico',
   maternity: 'Maternidad',
   personal: 'Personal',
-  unpaid: 'Sin pago',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -54,6 +56,7 @@ function formatDate(d: string) {
   const [y, m, day] = d.split('-')
   return `${day}/${m}/${y}`
 }
+
 
 function datesOverlap(start1: string, end1: string, start2: string, end2: string) {
   return start1 <= end2 && start2 <= end1
@@ -163,7 +166,7 @@ function generateVacationPDF(leave: Leave, emp: any) {
   const rows2: [string, string, string, string][] = [
     ['Fecha de Inicio', formatDate(leave.startDate), 'Fecha de Fin', formatDate(leave.endDate)],
     ['Número de Días', `${leave.days} día(s)`,       'Tipo',         'Vacaciones'],
-    ['Fecha de Solicitud', leave.createdAt ? formatDate(leave.createdAt.split('T')[0]) : '—', 'Aprobado por', leave.approvedBy ?? '—'],
+    ['Fecha de Solicitud', leave.createdAt ? formatDate(leave.createdAt.split('T')[0]) : '—', 'Aprobado/Rechazado por', (leave as any).approvedByName ?? '—'],
   ]
 
   rows2.forEach(([l1, v1, l2, v2]) => {
@@ -384,10 +387,18 @@ function TeamCalendar({ leaves, empMap }: { leaves: Leave[]; empMap: Map<string,
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export function VacacionesPage() {
   const qc = useQueryClient()
+  const user        = useAuthStore((s) => s.user)
+  const canApprove  = hasModuleAccess(user?.permissions, 'bienestar:aprobar', user?.rol)
+  const canCreate   = hasAction(user?.permissions, 'bienestar:crear', user?.rol)
+  const canDelete   = hasAction(user?.permissions, 'bienestar:eliminar', user?.rol)
+  const { filterByEmployeeId } = useMayordomoScope('bienestar')
   const [activeTab,         setActiveTab]         = useState<'list' | 'calendar'>('list')
   const [filterStatus,      setFilterStatus]      = useState<string>('all')
   const [selectedEmployee,  setSelectedEmployee]  = useState<string>('all')
   const [showModal,         setShowModal]         = useState(false)
+  const [confirmDelete,     setConfirmDelete]     = useState<string | null>(null)
+  const [confirmApprove,    setConfirmApprove]    = useState<string | null>(null)
+  const [confirmReject,     setConfirmReject]     = useState<string | null>(null)
   const [form,              setForm]              = useState<NewLeaveForm>({ employeeId: '', startDate: '', endDate: '', reason: '' })
 
   /* ── All leaves ── */
@@ -412,6 +423,14 @@ export function VacacionesPage() {
     queryKey: ['leave-balance', selectedEmployee],
     queryFn: () => leavesService.getBalance(selectedEmployee),
     enabled: selectedEmployee !== 'all',
+    staleTime: 30_000,
+  })
+
+  /* ── Vacation balance for employee in create modal ── */
+  const { data: modalBalance } = useQuery({
+    queryKey: ['leave-balance', form.employeeId],
+    queryFn: () => leavesService.getBalance(form.employeeId),
+    enabled: !!form.employeeId,
     staleTime: 30_000,
   })
 
@@ -442,11 +461,11 @@ export function VacacionesPage() {
   }, [empExistingLeaves, vacationPeriodYear])
 
   /* ── Table rows ── */
-  const leaves = allLeaves.filter((l) =>
+  const leaves = filterByEmployeeId(allLeaves.filter((l) =>
     l.type === 'vacation' &&
     (filterStatus === 'all' || l.status === filterStatus) &&
     (selectedEmployee === 'all' || l.employeeId === selectedEmployee)
-  )
+  ))
 
   /* ── Mutations ── */
   const createM = useMutation({
@@ -473,13 +492,13 @@ export function VacacionesPage() {
 
   const approveM = useMutation({
     mutationFn: leavesService.approve,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Aprobado') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); qc.invalidateQueries({ queryKey: ['dashboard-stats'] }); toast.success('Aprobado') },
     onError: () => toast.error('Error al aprobar'),
   })
 
   const rejectM = useMutation({
     mutationFn: leavesService.reject,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Rechazado') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); qc.invalidateQueries({ queryKey: ['dashboard-stats'] }); toast.success('Rechazado') },
     onError: () => toast.error('Error al rechazar'),
   })
 
@@ -508,9 +527,11 @@ export function VacacionesPage() {
             <CalendarDays size={13} /> Disponibilidad
           </button>
         </div>
-        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90">
-          <Plus size={14} /> Nueva Solicitud
-        </button>
+        {canCreate && (
+          <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90">
+            <Plus size={14} /> Nueva Solicitud
+          </button>
+        )}
       </div>
 
       {/* Calendar view */}
@@ -587,7 +608,7 @@ export function VacacionesPage() {
           <table className="w-full">
             <thead className="bg-[var(--bg-hover)]">
               <tr>
-                {['Empleado', 'Desde', 'Hasta', 'Días', 'Estado', 'Aprobado', 'Motivo', ''].map((h) => (
+                {['Empleado', 'Desde', 'Hasta', 'Días', 'Estado', 'Ingresado por', 'Aprobado/Rechazado por', 'Motivo', ''].map((h) => (
                   <th key={h} className={thCls}>{h}</th>
                 ))}
               </tr>
@@ -601,17 +622,23 @@ export function VacacionesPage() {
                   <td className={cn(tdCls, 'font-bold text-[var(--accent)] text-center')}>{l.days}</td>
                   <td className={tdCls}><StatusBadge status={l.status} /></td>
                   <td className={tdCls}>
-                    {l.approvedDate
-                      ? <span className="text-xs">{formatDate(l.approvedDate)}</span>
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-medium">{l.submittedByName || '—'}</span>
+                      {l.createdAt && <div className="text-[10px] text-[var(--text-3)]">{formatDateTime(l.createdAt)}</div>}
+                    </div>
+                  </td>
+                  <td className={tdCls}>
+                    {l.approvedByName
+                      ? <div className="space-y-0.5"><span className="text-xs font-medium">{l.approvedByName}</span>{l.approvedDate && <div className="text-[10px] text-[var(--text-3)]">{formatDateTime(l.approvedDate)}</div>}</div>
                       : <span className="text-[var(--text-3)]">—</span>}
                   </td>
                   <td className={cn(tdCls, 'max-w-[200px] truncate text-[var(--text-3)]')}>{l.reason || '—'}</td>
                   <td className={cn(tdCls, 'text-right')}>
                     <div className="flex items-center justify-end gap-1">
-                      {l.status === 'pending' && (
+                      {l.status === 'pending' && canApprove && (
                         <>
-                          <button onClick={() => approveM.mutate(l.id)} disabled={approveM.isPending} title="Aprobar" className="p-1.5 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors text-[var(--text-3)]"><Check size={13} /></button>
-                          <button onClick={() => rejectM.mutate(l.id)} disabled={rejectM.isPending} title="Rechazar" className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-[var(--text-3)]"><X size={13} /></button>
+                          <button onClick={() => setConfirmApprove(l.id)} title="Aprobar" className="p-1.5 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors text-[var(--text-3)]"><Check size={13} /></button>
+                          <button onClick={() => setConfirmReject(l.id)} title="Rechazar" className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-[var(--text-3)]"><X size={13} /></button>
                         </>
                       )}
                       <button
@@ -621,7 +648,9 @@ export function VacacionesPage() {
                       >
                         <FileDown size={13} />
                       </button>
-                      <button onClick={() => { if (confirm('¿Eliminar esta solicitud?')) deleteM.mutate(l.id) }} title="Eliminar" className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-[var(--text-3)]"><Trash2 size={13} /></button>
+                      {canDelete && (
+                        <button onClick={() => setConfirmDelete(l.id)} title="Eliminar" className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-[var(--text-3)]"><Trash2 size={13} /></button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -631,6 +660,35 @@ export function VacacionesPage() {
         </div>
       )}
       </>)}
+
+      <ConfirmDialog
+        open={!!confirmApprove}
+        title="Aprobar solicitud"
+        description="¿Confirmas la aprobación de esta solicitud de vacaciones?"
+        confirmLabel="Aprobar"
+        loading={approveM.isPending}
+        onConfirm={() => { approveM.mutate(confirmApprove!); setConfirmApprove(null) }}
+        onCancel={() => setConfirmApprove(null)}
+      />
+      <ConfirmDialog
+        open={!!confirmReject}
+        title="Rechazar solicitud"
+        description="¿Confirmas el rechazo de esta solicitud de vacaciones?"
+        confirmLabel="Rechazar"
+        variant="danger"
+        loading={rejectM.isPending}
+        onConfirm={() => { rejectM.mutate(confirmReject!); setConfirmReject(null) }}
+        onCancel={() => setConfirmReject(null)}
+      />
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Eliminar solicitud"
+        description="¿Estás seguro de que deseas eliminar esta solicitud de vacaciones?"
+        confirmLabel="Eliminar"
+        loading={deleteM.isPending}
+        onConfirm={() => { deleteM.mutate(confirmDelete!); setConfirmDelete(null) }}
+        onCancel={() => setConfirmDelete(null)}
+      />
 
       {/* Modal */}
       {showModal && (
@@ -649,6 +707,20 @@ export function VacacionesPage() {
                   employees={employees.filter((e) => e.status === 'active')}
                 />
               </div>
+              {modalBalance && form.employeeId && (
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {[
+                    { label: 'Acumulados', value: modalBalance.accrued, color: 'text-[var(--text-1)]' },
+                    { label: 'Usados',     value: modalBalance.used,    color: 'text-amber-600 dark:text-amber-400' },
+                    { label: 'Disponibles',value: modalBalance.available,color: 'text-emerald-600 dark:text-emerald-400' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-2 py-2">
+                      <p className="text-[10px] text-[var(--text-3)] uppercase tracking-wide mb-0.5">{label}</p>
+                      <p className={`text-lg font-bold ${color}`}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-[var(--text-3)] font-medium block mb-1">Desde</label>

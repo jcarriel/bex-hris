@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { socialCasesService, SocialCase, SocialCaseType } from '@/services/social-cases.service'
 import { empleadosService } from '@/services/empleados.service'
 import { Plus, X, Trash2, Loader2, Heart, ChevronDown, Edit2, Check } from 'lucide-react'
+import { ConfirmDialog } from '@/components/empleados/ConfirmDialog'
+import { useAuthStore, hasAction } from '@/store/authStore'
+import { useMayordomoScope } from '@/hooks/useMayordomoScope'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { EmployeeSearchSelect } from '@/components/shared/EmployeeSearchSelect'
@@ -40,10 +43,15 @@ interface CloseModal { caseId: string; resolution: string }
 
 export function TrabSocialPage() {
   const qc = useQueryClient()
+  const user      = useAuthStore((s) => s.user)
+  const canCreate = hasAction(user?.permissions, 'bienestar:crear', user?.rol)
+  const canDelete = hasAction(user?.permissions, 'bienestar:eliminar', user?.rol)
+  const { filterByEmployeeId } = useMayordomoScope('bienestar')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterType, setFilterType] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
   const [closeModal, setCloseModal] = useState<CloseModal | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [form, setForm] = useState({ employeeId: '', type: 'asistencia_medica' as SocialCaseType, title: '', description: '', date: new Date().toISOString().split('T')[0] })
 
   const { data: cases = [], isLoading } = useQuery({ queryKey: ['social-cases'], queryFn: socialCasesService.getAll, staleTime: 30_000 })
@@ -51,10 +59,10 @@ export function TrabSocialPage() {
   const employees: any[] = (empResult as any)?.data ?? []
   const empMap = new Map(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`]))
 
-  const filtered = cases.filter((c) =>
+  const filtered = filterByEmployeeId(cases.filter((c) =>
     (filterStatus === 'all' || c.status === filterStatus) &&
     (filterType === 'all' || c.type === filterType)
-  )
+  ))
 
   const createM = useMutation({
     mutationFn: () => socialCasesService.create({ employeeId: form.employeeId, type: form.type, title: form.title, description: form.description, date: form.date }),
@@ -93,9 +101,11 @@ export function TrabSocialPage() {
             {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </div>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90">
-          <Plus size={14} /> Nuevo Caso
-        </button>
+        {canCreate && (
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90">
+            <Plus size={14} /> Nuevo Caso
+          </button>
+        )}
       </div>
 
       {isLoading ? (
@@ -131,7 +141,9 @@ export function TrabSocialPage() {
                       {c.status === 'in_progress' && (
                         <button onClick={() => setCloseModal({ caseId: c.id, resolution: '' })} title="Cerrar caso" className="p-1.5 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors text-[var(--text-3)] text-xs font-medium">Cerrar</button>
                       )}
-                      <button onClick={() => { if (confirm('¿Eliminar este caso?')) deleteM.mutate(c.id) }} title="Eliminar" className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-[var(--text-3)]"><Trash2 size={13} /></button>
+                      {canDelete && (
+                        <button onClick={() => setConfirmDelete(c.id)} title="Eliminar" className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-[var(--text-3)]"><Trash2 size={13} /></button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -199,6 +211,15 @@ export function TrabSocialPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Eliminar caso"
+        description="¿Estás seguro de que deseas eliminar este caso? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        loading={deleteM.isPending}
+        onConfirm={() => { deleteM.mutate(confirmDelete!); setConfirmDelete(null) }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

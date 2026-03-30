@@ -422,6 +422,8 @@ async function startServer() {
       logger.info(`Server running on port ${PORT}`);
     });
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message + '\n' + error.stack : String(error);
+    console.error('Failed to start server:', errorMsg);
     logger.error('Failed to start server', error);
     process.exit(1);
   }

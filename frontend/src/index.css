@@ -170,3 +170,20 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-2); }
+
+/* ─── react-day-picker theme overrides ─── */
+.rdp-root {
+  --rdp-font-size: 0.8rem;
+  --rdp-day-height: 2rem;
+  --rdp-day-width: 2rem;
+  color: var(--text-1);
+}
+.rdp-month_caption { color: var(--text-1); font-size: 0.8rem; }
+.rdp-weekday { color: var(--text-3); font-size: 0.7rem; }
+.rdp-day_button { color: var(--text-2); border-radius: 6px; }
+.rdp-day_button:hover { background: var(--bg-hover) !important; color: var(--text-1); }
+.rdp-selected .rdp-day_button { background: var(--accent) !important; color: #fff; }
+.rdp-range_middle .rdp-day_button { background: var(--accent-soft) !important; color: var(--accent); border-radius: 0; }
+.rdp-range_start .rdp-day_button, .rdp-range_end .rdp-day_button { background: var(--accent) !important; color: #fff; }
+.rdp-nav button { color: var(--text-2); }
+.rdp-nav button:hover { background: var(--bg-hover); }

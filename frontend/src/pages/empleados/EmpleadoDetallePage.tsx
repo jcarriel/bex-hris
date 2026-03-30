@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useBlocker } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Pencil, UserX, Mail, Phone, MapPin,
@@ -18,6 +18,7 @@ import { EmpleadoSheet } from '@/components/empleados/EmpleadoSheet'
 import { ConfirmDialog } from '@/components/empleados/ConfirmDialog'
 import type { Empleado, EmpleadoFormData } from '@/types/empleado.types'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
+import { useAuthStore, hasAction } from '@/store/authStore'
 
 // ─── Tenure helper ───────────────────────────────────────────────────────────
 function tenureStr(hireDateStr: string): string {
@@ -39,8 +40,6 @@ function tenureStr(hireDateStr: string): string {
 const statusMap: Record<Empleado['status'], { label: string; variant: 'success' | 'warning' | 'danger' | 'neutral' }> = {
   active:     { label: 'Activo',      variant: 'success' },
   inactive:   { label: 'Inactivo',    variant: 'neutral' },
-  on_leave:   { label: 'En licencia', variant: 'warning' },
-  terminated: { label: 'Terminado',   variant: 'danger'  },
 }
 
 const genderLabels: Record<string, string> = { M: 'Masculino', F: 'Femenino', O: 'Otro' }
@@ -50,7 +49,6 @@ const leaveTypeLabels: Record<string, string> = {
   medical: 'Médico',
   maternity: 'Maternidad',
   personal: 'Personal',
-  unpaid: 'Sin sueldo',
 }
 
 // ─── Info row component ───────────────────────────────────────────────────────
@@ -382,10 +380,29 @@ export function EmpleadoDetallePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  const user    = useAuthStore((s) => s.user)
+  const canView = hasAction(user?.permissions, 'empleados:ver', user?.rol)
+  const canEdit = hasAction(user?.permissions, 'empleados:editar', user?.rol)
+
+  // Redirect if user lacks view permission
+  useEffect(() => {
+    if (!canView) navigate('/empleados', { replace: true })
+  }, [canView, navigate])
+
   const [editOpen, setEditOpen]             = useState(false)
   const [terminateOpen, setTerminateOpen]   = useState(false)
   const [terminateReason, setTerminateReason] = useState('')
   const [activeTab, setActiveTab] = useState<'info' | 'leaves' | 'tasks' | 'history'>('info')
+
+  // ── Unsaved changes guard ─────────────────────────────────────────────────
+  const blocker = useBlocker(editOpen)
+
+  useEffect(() => {
+    if (!editOpen) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [editOpen])
 
   // ── Fetch employee ────────────────────────────────────────────────────────
   const { data: empleado, isLoading, isError } = useQuery({
@@ -400,6 +417,7 @@ export function EmpleadoDetallePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['empleado', id] })
       queryClient.invalidateQueries({ queryKey: ['empleados'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
       setEditOpen(false)
       toast.success('Empleado actualizado')
     },
@@ -481,24 +499,21 @@ export function EmpleadoDetallePage() {
             {empleado.email && <span>{empleado.email}</span>}
             {empleado.cedula && <span>CI: {empleado.cedula}</span>}
             {empleado.laborName && <span>Labor: {empleado.laborName}</span>}
-            {empleado.hireDate && (
-              <span className="px-2 py-0.5 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] font-medium">
-                {tenureStr(empleado.hireDate)}
-              </span>
-            )}
           </div>
         </div>
 
         {/* Actions */}
         <div className="flex gap-2">
-          <button
-            onClick={() => setEditOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-[var(--border-color)] text-[var(--text-1)] hover:bg-[var(--bg-hover)] transition-colors"
-          >
-            <Pencil size={14} />
-            Editar
-          </button>
-          {empleado.status !== 'terminated' && (
+          {canEdit && (
+            <button
+              onClick={() => setEditOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-[var(--border-color)] text-[var(--text-1)] hover:bg-[var(--bg-hover)] transition-colors"
+            >
+              <Pencil size={14} />
+              Editar
+            </button>
+          )}
+          {canEdit && empleado.status !== 'inactive' && (
             <button
               onClick={() => setTerminateOpen(true)}
               className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
@@ -582,9 +597,9 @@ export function EmpleadoDetallePage() {
           </Section>
 
           {/* Termination info */}
-          {empleado.status === 'terminated' && (
-            <Section title="Baja / Terminación">
-              <InfoRow icon={Calendar} label="Fecha de terminación" value={empleado.terminationDate ? formatDate(empleado.terminationDate) : undefined} />
+          {empleado.status === 'inactive' && (
+            <Section title="Baja / Inactivo">
+              <InfoRow icon={Calendar} label="Fecha de baja" value={empleado.terminationDate ? formatDate(empleado.terminationDate) : undefined} />
               <InfoRow icon={Hash}     label="Motivo"               value={empleado.terminationReason} />
             </Section>
           )}
@@ -620,6 +635,17 @@ export function EmpleadoDetallePage() {
         loading={terminating}
         onConfirm={() => terminate()}
         onCancel={() => setTerminateOpen(false)}
+      />
+
+      {/* Navigation blocker when edit sheet is open */}
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        title="¿Salir sin guardar?"
+        description="Tienes cambios sin guardar en el formulario. Si sales ahora, se perderán."
+        confirmLabel="Salir de todas formas"
+        variant="danger"
+        onConfirm={() => blocker.proceed?.()}
+        onCancel={() => blocker.reset?.()}
       />
     </div>
   )

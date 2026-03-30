@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useAuthStore, hasAction } from '@/store/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Building2, Briefcase, Wrench, Users, CreditCard,
@@ -40,6 +41,16 @@ const GROUPS = [
 
 const ALL_TABLES = GROUPS.flatMap((g) => g.items)
 const CATALOG_TYPES = ['estado_civil', 'banco', 'tipo_contrato', 'contrato_actual', 'afiliacion']
+
+// ─── Permission hook ──────────────────────────────────────────────────────────
+function useTablePerms() {
+  const user = useAuthStore((s) => s.user)
+  return {
+    canCreate: hasAction(user?.permissions, 'tablas:crear', user?.rol),
+    canEdit:   hasAction(user?.permissions, 'tablas:editar', user?.rol),
+    canDelete: hasAction(user?.permissions, 'tablas:eliminar', user?.rol),
+  }
+}
 
 // ─── Inline input ─────────────────────────────────────────────────────────────
 function InlineInput({
@@ -103,11 +114,11 @@ function TableRow({
   name, sub, onEdit, onDelete, deleting, confirming, onDeleteRequest, onDeleteCancel,
 }: {
   name: string; sub?: string
-  onEdit: () => void
+  onEdit?: () => void
   onDelete: () => void
   deleting?: boolean
   confirming?: boolean
-  onDeleteRequest: () => void
+  onDeleteRequest?: () => void
   onDeleteCancel: () => void
 }) {
   if (confirming) {
@@ -143,18 +154,22 @@ function TableRow({
         {sub && <p className="text-xs text-[var(--text-3)] truncate mt-0.5">{sub}</p>}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={onEdit}
-          className="p-1.5 rounded-md text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
-        >
-          <Pencil size={13} />
-        </button>
-        <button
-          onClick={onDeleteRequest}
-          className="p-1.5 rounded-md text-[var(--text-3)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
-        >
-          <Trash2 size={13} />
-        </button>
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="p-1.5 rounded-md text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+          >
+            <Pencil size={13} />
+          </button>
+        )}
+        {onDeleteRequest && (
+          <button
+            onClick={onDeleteRequest}
+            className="p-1.5 rounded-md text-[var(--text-3)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -162,6 +177,7 @@ function TableRow({
 
 // ─── Centro de Costo panel ───────────────────────────────────────────────────
 function CentroCostoPanel() {
+  const { canCreate, canEdit, canDelete } = useTablePerms()
   const qc = useQueryClient()
   const [search, setSearch]           = useState('')
   const [adding, setAdding]           = useState(false)
@@ -196,12 +212,12 @@ function CentroCostoPanel() {
   const deleteMut = useMutation({
     mutationFn: departmentsService.delete,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['departments'] }); toast.success('Eliminado') },
-    onError: () => toast.error('Error al eliminar'),
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Error al eliminar'),
   })
 
   return (
     <PanelShell label="Centro de Costo" count={items.length} search={search} onSearch={setSearch}
-      onAdd={() => { setAdding(true); setAddName('') }} isLoading={isLoading}>
+      onAdd={canCreate ? () => { setAdding(true); setAddName('') } : undefined} isLoading={isLoading}>
       {adding && (
         <InlineInput value={addName} onChange={setAddName}
           onSave={() => addName.trim() && create(addName.trim())}
@@ -213,9 +229,9 @@ function CentroCostoPanel() {
           onCancel={() => setEditId(null)} saving={updating} />
       ) : (
         <TableRow key={item.id} name={item.name}
-          onEdit={() => { setEditId(item.id); setEditName(item.name) }}
+          onEdit={canEdit ? () => { setEditId(item.id); setEditName(item.name) } : undefined}
           confirming={confirmDeleteId === item.id}
-          onDeleteRequest={() => setConfirmDeleteId(item.id)}
+          onDeleteRequest={canDelete ? () => setConfirmDeleteId(item.id) : undefined}
           onDeleteCancel={() => setConfirmDeleteId(null)}
           onDelete={() => { setDeletingId(item.id); deleteMut.mutate(item.id, { onSettled: () => { setDeletingId(null); setConfirmDeleteId(null) } }) }}
           deleting={deletingId === item.id} />
@@ -227,6 +243,7 @@ function CentroCostoPanel() {
 
 // ─── Cargo panel ─────────────────────────────────────────────────────────────
 function CargoPanel() {
+  const { canCreate, canEdit, canDelete } = useTablePerms()
   const qc = useQueryClient()
   const [search, setSearch]               = useState('')
   const [adding, setAdding]               = useState(false)
@@ -261,14 +278,14 @@ function CargoPanel() {
   const deleteMut = useMutation({
     mutationFn: positionsService.delete,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['positions'] }); toast.success('Eliminado') },
-    onError: () => toast.error('Error al eliminar'),
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Error al eliminar'),
   })
 
   const deptName = (id: string) => depts.find((d) => d.id === id)?.name
 
   return (
     <PanelShell label="Cargo" count={items.length} search={search} onSearch={setSearch}
-      onAdd={() => { setAdding(true); setAddName(''); setAddDeptId('') }} isLoading={isLoading}>
+      onAdd={canCreate ? () => { setAdding(true); setAddName(''); setAddDeptId('') } : undefined} isLoading={isLoading}>
       {adding && (
         <InlineInput value={addName} onChange={setAddName}
           onSave={() => addName.trim() && addDeptId && create({ name: addName.trim(), departmentId: addDeptId })}
@@ -282,9 +299,9 @@ function CargoPanel() {
           onCancel={() => setEditId(null)} saving={updating} />
       ) : (
         <TableRow key={item.id} name={item.name} sub={deptName(item.departmentId)}
-          onEdit={() => { setEditId(item.id); setEditName(item.name) }}
+          onEdit={canEdit ? () => { setEditId(item.id); setEditName(item.name) } : undefined}
           confirming={confirmDeleteId === item.id}
-          onDeleteRequest={() => setConfirmDeleteId(item.id)}
+          onDeleteRequest={canDelete ? () => setConfirmDeleteId(item.id) : undefined}
           onDeleteCancel={() => setConfirmDeleteId(null)}
           onDelete={() => { setDeletingId(item.id); deleteMut.mutate(item.id, { onSettled: () => { setDeletingId(null); setConfirmDeleteId(null) } }) }}
           deleting={deletingId === item.id} />
@@ -296,6 +313,7 @@ function CargoPanel() {
 
 // ─── Labor panel ─────────────────────────────────────────────────────────────
 function LaborPanel() {
+  const { canCreate, canEdit, canDelete } = useTablePerms()
   const qc = useQueryClient()
   const [search, setSearch]               = useState('')
   const [adding, setAdding]               = useState(false)
@@ -337,7 +355,7 @@ function LaborPanel() {
 
   return (
     <PanelShell label="Labor" count={items.length} search={search} onSearch={setSearch}
-      onAdd={() => { setAdding(true); setAddName(''); setAddPosId('') }} isLoading={isLoading}>
+      onAdd={canCreate ? () => { setAdding(true); setAddName(''); setAddPosId('') } : undefined} isLoading={isLoading}>
       {adding && (
         <InlineInput value={addName} onChange={setAddName}
           onSave={() => addName.trim() && addPosId && create({ name: addName.trim(), positionId: addPosId })}
@@ -351,9 +369,9 @@ function LaborPanel() {
           onCancel={() => setEditId(null)} saving={updating} />
       ) : (
         <TableRow key={item.id} name={item.name} sub={posName(item.positionId)}
-          onEdit={() => { setEditId(item.id); setEditName(item.name) }}
+          onEdit={canEdit ? () => { setEditId(item.id); setEditName(item.name) } : undefined}
           confirming={confirmDeleteId === item.id}
-          onDeleteRequest={() => setConfirmDeleteId(item.id)}
+          onDeleteRequest={canDelete ? () => setConfirmDeleteId(item.id) : undefined}
           onDeleteCancel={() => setConfirmDeleteId(null)}
           onDelete={() => { setDeletingId(item.id); deleteMut.mutate(item.id, { onSettled: () => { setDeletingId(null); setConfirmDeleteId(null) } }) }}
           deleting={deletingId === item.id} />
@@ -365,6 +383,7 @@ function LaborPanel() {
 
 // ─── Generic catalog panel ───────────────────────────────────────────────────
 function CatalogPanel({ type, label }: { type: string; label: string }) {
+  const { canCreate, canEdit, canDelete } = useTablePerms()
   const qc = useQueryClient()
   const [search, setSearch]               = useState('')
   const [adding, setAdding]               = useState(false)
@@ -405,7 +424,7 @@ function CatalogPanel({ type, label }: { type: string; label: string }) {
 
   return (
     <PanelShell label={label} count={items.length} search={search} onSearch={setSearch}
-      onAdd={() => { setAdding(true); setAddValue('') }} isLoading={isLoading}>
+      onAdd={canCreate ? () => { setAdding(true); setAddValue('') } : undefined} isLoading={isLoading}>
       {adding && (
         <InlineInput value={addValue} onChange={setAddValue}
           onSave={() => addValue.trim() && create(addValue.trim())}
@@ -417,9 +436,9 @@ function CatalogPanel({ type, label }: { type: string; label: string }) {
           onCancel={() => setEditId(null)} saving={updating} />
       ) : (
         <TableRow key={item.id} name={item.value}
-          onEdit={() => { setEditId(item.id); setEditValue(item.value) }}
+          onEdit={canEdit ? () => { setEditId(item.id); setEditValue(item.value) } : undefined}
           confirming={confirmDeleteId === item.id}
-          onDeleteRequest={() => setConfirmDeleteId(item.id)}
+          onDeleteRequest={canDelete ? () => setConfirmDeleteId(item.id) : undefined}
           onDeleteCancel={() => setConfirmDeleteId(null)}
           onDelete={() => { setDeletingId(item.id); deleteMut.mutate(item.id, { onSettled: () => { setDeletingId(null); setConfirmDeleteId(null) } }) }}
           deleting={deletingId === item.id} />
@@ -432,7 +451,7 @@ function CatalogPanel({ type, label }: { type: string; label: string }) {
 // ─── Panel shell ──────────────────────────────────────────────────────────────
 function PanelShell({ label, count, search, onSearch, onAdd, isLoading, children }: {
   label: string; count: number; search: string; onSearch: (v: string) => void
-  onAdd: () => void; isLoading: boolean; children: React.ReactNode
+  onAdd?: () => void; isLoading: boolean; children: React.ReactNode
 }) {
   return (
     <div className="flex flex-col h-full">
@@ -442,13 +461,15 @@ function PanelShell({ label, count, search, onSearch, onAdd, isLoading, children
           <h2 className="text-base font-semibold text-[var(--text-1)]">{label}</h2>
           <p className="text-xs text-[var(--text-3)] mt-0.5">{count} {count === 1 ? 'registro' : 'registros'}</p>
         </div>
-        <button
-          onClick={onAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
-        >
-          <Plus size={14} />
-          Agregar
-        </button>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <Plus size={14} />
+            Agregar
+          </button>
+        )}
       </div>
 
       {/* Search */}

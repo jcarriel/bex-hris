@@ -8,6 +8,8 @@ export interface AdminUser {
   role: string
   roleId?: string
   roleName?: string
+  employeeId?: string | null
+  employeeName?: string | null
   status: string
   createdAt: string
   updatedAt: string
@@ -18,6 +20,7 @@ export interface CreateUserData {
   username: string
   email: string
   roleId?: string
+  employeeId?: string
 }
 
 export interface UpdateUserData {
@@ -25,6 +28,7 @@ export interface UpdateUserData {
   email?: string
   roleId?: string
   status?: string
+  employeeId?: string | null
 }
 
 export const usersService = {

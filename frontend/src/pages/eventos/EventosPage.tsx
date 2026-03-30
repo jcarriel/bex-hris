@@ -104,7 +104,16 @@ function MiniCalendar({ events, onSelectDate }: { events: CalendarEvent[]; onSel
           className="p-1 rounded-md hover:bg-[var(--bg-hover)] text-[var(--text-2)] transition-colors">
           <ChevronLeft size={14} />
         </button>
-        <span className="text-xs font-semibold capitalize text-[var(--text-1)]">{monthLabel}</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-semibold capitalize text-[var(--text-1)]">{cursor.toLocaleDateString('es-ES', { month: 'long' })}</span>
+          <div className="flex items-center gap-0.5">
+            <button onClick={() => setCursor(new Date(year - 1, month, 1))}
+              className="p-0.5 rounded text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors text-[10px] leading-none">▲</button>
+            <span className="text-xs font-semibold text-[var(--accent)] w-10 text-center">{year}</span>
+            <button onClick={() => setCursor(new Date(year + 1, month, 1))}
+              className="p-0.5 rounded text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors text-[10px] leading-none">▼</button>
+          </div>
+        </div>
         <button onClick={() => setCursor(new Date(year, month + 1, 1))}
           className="p-1 rounded-md hover:bg-[var(--bg-hover)] text-[var(--text-2)] transition-colors">
           <ChevronRight size={14} />

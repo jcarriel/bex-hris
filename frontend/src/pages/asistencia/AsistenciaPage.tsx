@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useAuthStore, hasAction } from '@/store/authStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import {
@@ -462,7 +463,7 @@ function MarcacionesTab({
           <thead>
             <tr style={{ backgroundColor: 'var(--bg-surface)' }}>
               <th className="w-8" />
-              {['Cédula', 'Nombre', 'Departamento', 'Registros'].map((h) => (
+              {['Cédula', 'Nombre', 'Centro de Costo', 'Registros'].map((h) => (
                 <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">{h}</th>
               ))}
             </tr>
@@ -624,7 +625,7 @@ function InconsistenciasTab({
           <thead>
             <tr style={{ backgroundColor: 'var(--bg-surface)' }}>
               <th className="w-8" />
-              {['Cédula', 'Nombre', 'Departamento', 'Inconsistencias'].map((h) => (
+              {['Cédula', 'Nombre', 'Centro de Costo', 'Inconsistencias'].map((h) => (
                 <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">{h}</th>
               ))}
             </tr>
@@ -925,9 +926,13 @@ function GenerarTab({
 
 export function AsistenciaPage() {
   const qc = useQueryClient()
+  const user      = useAuthStore((s) => s.user)
+  const canDelete = hasAction(user?.permissions, 'asistencia:eliminar', user?.rol)
   const [tab,            setTab]            = useState<Tab>('marcaciones')
   const [selectedPeriod, setSelectedPeriod] = useState('')
   const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo,   setFilterDateTo]   = useState('')
 
   /* Periods */
   const { data: periods = [], isLoading: loadingPeriods } = useQuery({
@@ -965,24 +970,33 @@ export function AsistenciaPage() {
     enabled:  !!period,
   })
 
+  /* Apply date range filter */
+  const filteredMarcaciones = useMemo(
+    () => marcaciones.filter((m) =>
+      (!filterDateFrom || m.date >= filterDateFrom) &&
+      (!filterDateTo   || m.date <= filterDateTo)
+    ),
+    [marcaciones, filterDateFrom, filterDateTo],
+  )
+
   /* Derived */
   const departments = useMemo(
-    () => [...new Set(marcaciones.map((m) => m.department).filter(Boolean))].sort(),
-    [marcaciones],
+    () => [...new Set(filteredMarcaciones.map((m) => m.department).filter(Boolean))].sort(),
+    [filteredMarcaciones],
   )
 
   const inconsistencyCount = useMemo(
-    () => detectInconsistencies(marcaciones, scheduleMap).length,
-    [marcaciones, scheduleMap],
+    () => detectInconsistencies(filteredMarcaciones, scheduleMap).length,
+    [filteredMarcaciones, scheduleMap],
   )
 
   /* Stats */
   const stats = useMemo(() => {
-    const employees = new Set(marcaciones.map((m) => m.cedula)).size
-    const validDays   = marcaciones.filter((m) => m.firstCheckIn && m.lastCheckOut && m.firstCheckIn !== m.lastCheckOut).length
-    const invalidDays = marcaciones.filter((m) => m.firstCheckIn && m.lastCheckOut && m.firstCheckIn === m.lastCheckOut).length
-    return { employees, validDays, invalidDays, total: marcaciones.length }
-  }, [marcaciones])
+    const employees = new Set(filteredMarcaciones.map((m) => m.cedula)).size
+    const validDays   = filteredMarcaciones.filter((m) => m.firstCheckIn && m.lastCheckOut && m.firstCheckIn !== m.lastCheckOut).length
+    const invalidDays = filteredMarcaciones.filter((m) => m.firstCheckIn && m.lastCheckOut && m.firstCheckIn === m.lastCheckOut).length
+    return { employees, validDays, invalidDays, total: filteredMarcaciones.length }
+  }, [filteredMarcaciones])
 
   /* Delete period */
   const deleteMutation = useMutation({
@@ -1013,10 +1027,10 @@ export function AsistenciaPage() {
             {period ? `${period.label} · ${period.startDate} → ${period.endDate}` : 'Selecciona un período'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={selectedPeriod}
-            onChange={(e) => { setSelectedPeriod(e.target.value); setTab('marcaciones') }}
+            onChange={(e) => { setSelectedPeriod(e.target.value); setTab('marcaciones'); setFilterDateFrom(''); setFilterDateTo('') }}
             className="px-3 py-2 text-sm rounded-lg border outline-none bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-1)] focus:border-[var(--accent)] transition-colors"
           >
             <option value="">Seleccionar período</option>
@@ -1024,6 +1038,38 @@ export function AsistenciaPage() {
               <option key={p.startDate} value={p.startDate}>{p.label}</option>
             ))}
           </select>
+          {period && (
+            <>
+              <input
+                type="date"
+                value={filterDateFrom}
+                min={period.startDate}
+                max={period.endDate}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="h-9 px-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-1)] focus:outline-none focus:border-[var(--accent)]"
+                title="Desde"
+              />
+              <span className="text-xs text-[var(--text-3)]">—</span>
+              <input
+                type="date"
+                value={filterDateTo}
+                min={period.startDate}
+                max={period.endDate}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="h-9 px-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-1)] focus:outline-none focus:border-[var(--accent)]"
+                title="Hasta"
+              />
+              {(filterDateFrom || filterDateTo) && (
+                <button
+                  onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }}
+                  className="text-[var(--text-3)] hover:text-red-500 transition-colors"
+                  title="Limpiar fechas"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -1096,28 +1142,28 @@ export function AsistenciaPage() {
                       <X size={14} />
                     </button>
                   </div>
-                ) : (
+                ) : canDelete ? (
                   <button onClick={() => setConfirmDelete(true)}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
                     <Trash2 size={12} /> Eliminar período
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
 
             {/* Tab content */}
             {tab === 'marcaciones' && (
-              <MarcacionesTab marcaciones={marcaciones} departments={departments} />
+              <MarcacionesTab marcaciones={filteredMarcaciones} departments={departments} />
             )}
             {tab === 'inconsistencias' && (
-              <InconsistenciasTab marcaciones={marcaciones} departments={departments} scheduleMap={scheduleMap} />
+              <InconsistenciasTab marcaciones={filteredMarcaciones} departments={departments} scheduleMap={scheduleMap} />
             )}
             {tab === 'horas_extras' && (
-              <HorasExtrasTab marcaciones={marcaciones} scheduleMap={scheduleMap} endDate={period.endDate} />
+              <HorasExtrasTab marcaciones={filteredMarcaciones} scheduleMap={scheduleMap} endDate={period.endDate} />
             )}
             {tab === 'generar' && (
               <GenerarTab
-                marcaciones={marcaciones}
+                marcaciones={filteredMarcaciones}
                 scheduleMap={scheduleMap}
                 endDate={period.endDate}
                 periodLabel={period.label.replace(/\s/g, '_')}

@@ -38,12 +38,12 @@ class NovedadRepository {
 
   async getAll(): Promise<Novedad[]> {
     const db = getDatabase();
-    return db.all<Novedad[]>('SELECT * FROM novedades ORDER BY date DESC, createdAt DESC');
+    return db.all<Novedad>('SELECT * FROM novedades ORDER BY date DESC, createdAt DESC');
   }
 
   async findByEmployee(employeeId: string): Promise<Novedad[]> {
     const db = getDatabase();
-    return db.all<Novedad[]>(
+    return db.all<Novedad>(
       'SELECT * FROM novedades WHERE employeeId = ? ORDER BY date DESC',
       [employeeId]
     );

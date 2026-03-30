@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -6,10 +6,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { departmentsService } from '@/services/departments.service'
 import { positionsService } from '@/services/positions.service'
+import { laborsService } from '@/services/labors.service'
 import { catalogService } from '@/services/catalog.service'
 import { api } from '@/services/api'
 import type { Empleado, EmpleadoFormData } from '@/types/empleado.types'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/empleados/ConfirmDialog'
 
 const schema = z.object({
   firstName:      z.string().min(2, 'Mínimo 2 caracteres'),
@@ -18,15 +20,17 @@ const schema = z.object({
   cedula:         z.string().min(5, 'Cédula inválida'),
   departmentId:   z.string().min(1, 'Selecciona un departamento'),
   positionId:     z.string().min(1, 'Selecciona un cargo'),
+  laborId:        z.string().optional(),
   baseSalary:     z.coerce.number().min(0, 'Ingresa el salario'),
   phone:          z.string().optional(),
   genero:         z.enum(['M', 'F', 'O']).optional(),
   hireDate:       z.string().optional(),
-  contratoTipo:   z.string().optional(),
-  contratoTipoId: z.string().optional(),
-  contratoActual: z.string().optional(),
+  contratoTipo:    z.string().optional(),
+  contratoTipoId:  z.string().optional(),
+  contratoActual:  z.string().optional(),
   contratoActualId: z.string().optional(),
-  status:         z.enum(['active', 'inactive', 'on_leave', 'terminated']).optional(),
+  contractEndDate: z.string().optional(),
+  status:         z.enum(['active', 'inactive']).optional(),
   dateOfBirth:    z.string().optional(),
   estadoCivil:    z.string().optional(),
   estadoCivilId:  z.string().optional(),
@@ -107,6 +111,7 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
       cedula:         defaultValues?.cedula         ?? '',
       departmentId:   defaultValues?.departmentId   ?? '',
       positionId:     defaultValues?.positionId     ?? '',
+      laborId:        defaultValues?.laborId        ?? '',
       baseSalary:     defaultValues?.baseSalary     ?? 0,
       phone:          defaultValues?.phone          ?? '',
       genero:         defaultValues?.genero,
@@ -115,6 +120,7 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
       contratoTipoId:   defaultValues?.contratoTipoId   ?? '',
       contratoActual:   defaultValues?.contratoActual   ?? '',
       contratoActualId: defaultValues?.contratoActualId ?? '',
+      contractEndDate:  defaultValues?.contractEndDate  ?? '',
       status:         defaultValues?.status         ?? 'active',
       dateOfBirth:    defaultValues?.dateOfBirth    ?? '',
       estadoCivil:    defaultValues?.estadoCivil    ?? '',
@@ -133,9 +139,11 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
   })
 
   const selectedDeptId = watch('departmentId')
+  const selectedPosId  = watch('positionId')
   const watchedCedula = watch('cedula')
 
   const [cedulaWarning, setCedulaWarning] = useState<string | null>(null)
+  const [pendingValues, setPendingValues] = useState<FormValues | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const checkCedulaDuplicate = useCallback(async (cedula: string, currentId?: string) => {
@@ -169,6 +177,12 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
     enabled: true,
   })
 
+  const { data: labors = [], isLoading: loadingLabors } = useQuery({
+    queryKey: ['labors', selectedPosId],
+    queryFn: () => laborsService.getAll(selectedPosId || undefined),
+    enabled: !!selectedPosId,
+  })
+
   const { data: estadoCiviles = [] } = useQuery({
     queryKey: ['catalog', 'estado_civil'],
     queryFn: () => catalogService.getByType('estado_civil'),
@@ -190,8 +204,16 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
   useEffect(() => {
     if (!defaultValues?.positionId) {
       setValue('positionId', '')
+      setValue('laborId', '')
     }
   }, [selectedDeptId]) // eslint-disable-line
+
+  // Reset laborId when position changes
+  useEffect(() => {
+    if (!defaultValues?.laborId) {
+      setValue('laborId', '')
+    }
+  }, [selectedPosId]) // eslint-disable-line
 
   // Re-apply positionId after positions finish loading (they may arrive after mount)
   useEffect(() => {
@@ -201,19 +223,32 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
     }
   }, [positions]) // eslint-disable-line
 
+  // Re-apply laborId after labors finish loading
+  useEffect(() => {
+    if (labors.length > 0 && defaultValues?.laborId) {
+      const exists = labors.some((l) => l.id === defaultValues.laborId)
+      if (exists) setValue('laborId', defaultValues.laborId)
+    }
+  }, [labors]) // eslint-disable-line
+
   const handleFormSubmit = async (values: FormValues) => {
     if (cedulaWarning) {
-      const proceed = window.confirm(`${cedulaWarning}\n\n¿Desea continuar de todas formas?`)
-      if (!proceed) return
+      setPendingValues(values)
+      return
     }
-    const data: EmpleadoFormData = {
-      ...values,
-      email: values.email || undefined,
-    }
+    const data: EmpleadoFormData = { ...values, email: values.email || undefined }
+    await onSubmit(data)
+  }
+
+  const handleConfirmedSubmit = async () => {
+    if (!pendingValues) return
+    const data: EmpleadoFormData = { ...pendingValues, email: pendingValues.email || undefined }
+    setPendingValues(null)
     await onSubmit(data)
   }
 
   return (
+    <Fragment>
     <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-2 gap-4">
@@ -261,6 +296,15 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
             </select>
           </Field>
 
+          <Field label="Labor">
+            <select {...register('laborId')} className={selectClass()} disabled={loadingLabors || !selectedPosId}>
+              <option value="">{!selectedPosId ? 'Selecciona cargo primero' : loadingLabors ? 'Cargando...' : 'Sin labor'}</option>
+              {labors.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </Field>
+
           {/* ── Información laboral ── */}
           <Section title="Información laboral" />
 
@@ -286,12 +330,14 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
             </select>
           </Field>
 
+          <Field label="Fecha de salida">
+            <input {...register('contractEndDate')} type="date" className={inputClass()} />
+          </Field>
+
           <Field label="Estado">
             <select {...register('status')} className={selectClass()}>
               <option value="active">Activo</option>
               <option value="inactive">Inactivo</option>
-              <option value="on_leave">En licencia</option>
-              <option value="terminated">Terminado</option>
             </select>
           </Field>
 
@@ -389,5 +435,16 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
         </button>
       </div>
     </form>
+    <ConfirmDialog
+      open={!!pendingValues}
+      title="Cédula duplicada"
+      description={`${cedulaWarning}\n\n¿Desea continuar de todas formas?`}
+      confirmLabel="Continuar"
+      variant="warning"
+      loading={isLoading}
+      onConfirm={handleConfirmedSubmit}
+      onCancel={() => setPendingValues(null)}
+    />
+    </Fragment>
   )
 }

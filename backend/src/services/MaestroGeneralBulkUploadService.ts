@@ -77,7 +77,7 @@ class MaestroGeneralBulkUploadService {
           'INSERT INTO labores (id, name, description, positionId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)',
           [id, key, null, null, now, now]
         );
-        labor = { id };
+        labor = { id, name: key, description: null, positionId: null, createdAt: now, updatedAt: now } as any;
       }
       laborCache[key] = labor.id;
       return labor.id;
