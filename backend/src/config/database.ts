@@ -46,9 +46,9 @@ let db: DbAdapter | null = null;
 export async function initializeDatabase(): Promise<DbAdapter> {
   if (db) return db;
 
-  const cfg: PoolConfig = process.env.DATABASE_URL
+  const cfg: PoolConfig = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL
     ? {
-        connectionString: process.env.DATABASE_URL,
+        connectionString: process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
         max: 10,
         idleTimeoutMillis: 30_000,
