@@ -46,20 +46,31 @@ let db: DbAdapter | null = null;
 export async function initializeDatabase(): Promise<DbAdapter> {
   if (db) return db;
 
-  const cfg: PoolConfig = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL
+  const dbUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+  
+  console.log('Database config:', {
+    hasPublicUrl: !!process.env.DATABASE_PUBLIC_URL,
+    hasUrl: !!process.env.DATABASE_URL,
+    hasHost: !!process.env.DB_HOST,
+    pghost: process.env.PGHOST,
+    pgport: process.env.PGPORT,
+    pgdatabase: process.env.PGDATABASE,
+  });
+
+  const cfg: PoolConfig = dbUrl && dbUrl.trim()
     ? {
-        connectionString: process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL,
+        connectionString: dbUrl,
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
         max: 10,
         idleTimeoutMillis: 30_000,
         connectionTimeoutMillis: 5_000,
       }
     : {
-        host:     process.env.DB_HOST     || 'localhost',
-        port:     Number(process.env.DB_PORT) || 5432,
-        database: process.env.DB_NAME     || 'hris',
-        user:     process.env.DB_USER     || 'postgres',
-        password: process.env.DB_PASSWORD || '',
+        host:     process.env.PGHOST || process.env.DB_HOST     || 'localhost',
+        port:     Number(process.env.PGPORT || process.env.DB_PORT) || 5432,
+        database: process.env.PGDATABASE || process.env.DB_NAME     || 'hris',
+        user:     process.env.PGUSER || process.env.DB_USER     || 'postgres',
+        password: process.env.PGPASSWORD || process.env.DB_PASSWORD || '',
         max: 10,
       };
 
