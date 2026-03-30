@@ -2,21 +2,9 @@ import * as XLSX from 'xlsx';
 import MarcacionRepository from '@repositories/MarcacionRepository';
 import logger from '@utils/logger';
 import type { Marcacion } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+
 
 export class AttendanceBulkUploadService {
-  private monthNameToNumber(monthName: string): number {
-    const months: { [key: string]: number } = {
-      'ENERO': 1, 'FEBRERO': 2, 'MARZO': 3, 'ABRIL': 4,
-      'MAYO': 5, 'JUNIO': 6, 'JULIO': 7, 'AGOSTO': 8,
-      'SEPTIEMBRE': 9, 'OCTUBRE': 10, 'NOVIEMBRE': 11, 'DICIEMBRE': 12,
-      'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
-      'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
-      'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
-    };
-    return months[monthName] || parseInt(monthName) || 1;
-  }
-
   async processAttendanceFile(fileBuffer: Buffer, fileName: string): Promise<{
     processedCount: number;
     createdCount: number;
@@ -38,75 +26,81 @@ export class AttendanceBulkUploadService {
 
       // Leer archivo XLSX
       const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-      
+
       // Buscar la hoja "BASE", si no existe usar la primera hoja
       let sheetName = workbook.SheetNames[0];
       if (workbook.SheetNames.includes('BASE')) {
         sheetName = 'BASE';
       }
-      
+
       logger.info(`Reading sheet: ${sheetName}`);
       const worksheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-      if (rows.length === 0) {
+      // Leer todas las filas como arrays para detectar filas de encabezado
+      const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+
+      if (rawRows.length === 0) {
         throw new Error('El archivo está vacío o no tiene datos');
       }
 
-      logger.info(`Found ${rows.length} rows in attendance file`);
-      
-      if (rows.length > 0) {
-        const firstRow = rows[0] as any;
-        logger.info(`Column names in file: ${JSON.stringify(Object.keys(firstRow))}`);
+      // Buscar la fila de encabezados (contiene "Id del Empleado" o similar)
+      let headerRowIndex = -1;
+      for (let i = 0; i < rawRows.length; i++) {
+        const normalized = rawRows[i].map((c: any) => String(c).replace(/\s+/g, '').toUpperCase());
+        if (normalized.includes('IDDELEMPLEADO') || normalized.includes('NOMBRES')) {
+          headerRowIndex = i;
+          break;
+        }
       }
 
-      // Mapeo de columnas esperadas
-      const columnMapping: { [key: string]: string } = {
-        'No.': 'no',
-        'Id del Empleado': 'cedula',
-        'Nombres': 'employeeName',
-        'Departamento': 'department',
-        'Mes': 'month',
-        'Fecha': 'date',
-        'Asistencia Diaria': 'dailyAttendance',
-        'Primera Marcación': 'firstCheckIn',
-        'Última Marcación': 'lastCheckOut',
-        'Tiempo Total': 'totalTime',
+      if (headerRowIndex === -1) {
+        throw new Error('No se encontró la fila de encabezados en el archivo. Verifique que el archivo tenga las columnas: Id del Empleado, Nombres, Fecha');
+      }
+
+      // Construir mapa de columna → índice
+      const headerRow = rawRows[headerRowIndex];
+      const colMap: { [key: string]: number } = {};
+      for (let i = 0; i < headerRow.length; i++) {
+        const key = String(headerRow[i]).replace(/\s+/g, '').toUpperCase();
+        if (key) colMap[key] = i;
+      }
+
+      logger.info(`Header row found at index ${headerRowIndex}. Columns: ${JSON.stringify(colMap)}`);
+
+      const getVal = (row: any[], colKey: string): string => {
+        const idx = colMap[colKey];
+        if (idx === undefined) return '';
+        const v = row[idx];
+        return v !== undefined && v !== null ? String(v).trim() : '';
       };
 
-      // Crear mapeo normalizado
-      const normalizedColumnMapping: { [key: string]: string } = {};
-      for (const [key, value] of Object.entries(columnMapping)) {
-        const normalizedKey = key.replace(/\s+/g, '').toUpperCase();
-        normalizedColumnMapping[normalizedKey] = value;
-      }
-      
-      logger.info(`Normalized column mapping: ${JSON.stringify(normalizedColumnMapping)}`);
+      const dataRows = rawRows.slice(headerRowIndex + 1);
+      logger.info(`Found ${dataRows.length} potential data rows`);
 
-      // Procesar cada fila
-      for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      // Procesar cada fila de datos
+      for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
         try {
-          const row = rows[rowIndex] as any;
+          const row = dataRows[rowIndex];
 
-          // Normalizar la fila actual
-          const normalizedCurrentRow: { [key: string]: any } = {};
-          for (const [key, value] of Object.entries(row)) {
-            const normalizedKey = (key as string).replace(/\s+/g, '').toUpperCase();
-            normalizedCurrentRow[normalizedKey] = value;
-          }
+          // Saltar filas vacías
+          if (!row || row.every((c: any) => !c && c !== 0)) continue;
 
-          logger.info(`Row ${rowIndex + 1} normalized keys: ${JSON.stringify(Object.keys(normalizedCurrentRow))}`);
+          // Saltar filas donde No. no es un número válido (filas de encabezado residuales, totales, etc.)
+          const noVal = getVal(row, 'NO.');
+          if (!noVal || isNaN(Number(noVal))) continue;
 
           // Extraer datos del archivo
-          let cedula = this.getStringFromNormalized(normalizedCurrentRow, 'IDDELEMPLEADO');
-          const employeeName = this.getStringFromNormalized(normalizedCurrentRow, 'NOMBRES');
-          const department = this.getStringFromNormalized(normalizedCurrentRow, 'DEPARTAMENTO');
-          const monthStr = this.getStringFromNormalized(normalizedCurrentRow, 'MES');
-          const dateStr = this.getStringFromNormalized(normalizedCurrentRow, 'FECHA');
-          const dailyAttendance = this.getStringFromNormalized(normalizedCurrentRow, 'ASISTENCIADIARIA');
-          const firstCheckIn = this.getStringFromNormalized(normalizedCurrentRow, 'PRIMERAMARCACIÓN');
-          const lastCheckOut = this.getStringFromNormalized(normalizedCurrentRow, 'ÚLTIMAMARCACIÓN');
-          const totalTime = this.getStringFromNormalized(normalizedCurrentRow, 'TIEMPOTOTAL');
+          let cedula = getVal(row, 'IDDELEMPLEADO');
+          const employeeName = getVal(row, 'NOMBRES');
+          const department = getVal(row, 'DEPARTAMENTO');
+          const dateStr = getVal(row, 'FECHA');
+          const dailyAttendance = getVal(row, 'ASISTENCIADIARIA');
+          const firstCheckIn = getVal(row, 'PRIMERAMARCACIÓN') || getVal(row, 'PRIMERAMARCACION');
+          const lastCheckOut = getVal(row, 'ÚLTIMAMARCACIÓN') || getVal(row, 'ULTIMAMARCACION') || getVal(row, 'ÚLTIMAMARCACION');
+          const totalTime = getVal(row, 'TIEMPOTOTAL');
+
+          // Saltar filas sin datos de empleado
+          if (!cedula && !employeeName) continue;
 
           // Normalizar cédula: si tiene 9 dígitos, agregar 0 al inicio
           const cedulaDigits = cedula.replace(/\D/g, '');
@@ -116,27 +110,27 @@ export class AttendanceBulkUploadService {
             cedula = cedulaDigits;
           }
 
-          // Parsear mes
-          const month = this.monthNameToNumber(monthStr);
-
-          // Parsear fecha (esperado formato DD-MM-YYYY o DD/MM/YYYY o YYYY-MM-DD)
+          // Parsear fecha (DD-MM-YYYY → YYYY-MM-DD) y derivar mes de la fecha
           let date = dateStr;
+          let month = 1;
           if (dateStr.includes('-')) {
-            // Formato DD-MM-YYYY
             const parts = dateStr.split('-');
             if (parts.length === 3) {
               const day = parts[0];
-              const month = parts[1];
+              const monthPart = parts[1];
               const year = parts[2];
-              // Verificar si es DD-MM-YYYY (día < 32, mes < 13)
-              if (parseInt(day) <= 31 && parseInt(month) <= 12) {
-                date = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+              if (parseInt(day) <= 31 && parseInt(monthPart) <= 12) {
+                date = `${year}-${monthPart.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                month = parseInt(monthPart);
               }
             }
           } else if (dateStr.includes('/')) {
-            // Formato DD/MM/YYYY
-            const [day, month, year] = dateStr.split('/');
-            date = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            const [day, monthPart, year] = dateStr.split('/');
+            date = `${year}-${monthPart.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            month = parseInt(monthPart);
+          } else if (dateStr.length === 10 && dateStr[4] === '-') {
+            // Ya está en formato YYYY-MM-DD
+            month = parseInt(dateStr.split('-')[1]);
           }
 
           const marcacionData: Omit<Marcacion, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -161,10 +155,7 @@ export class AttendanceBulkUploadService {
             if (!marcacionData.date) missingFields.push('Fecha');
             const errorMsg = `Faltan datos requeridos: ${missingFields.join(', ')}`;
             logger.error(`Row ${rowIndex + 1} validation error: ${errorMsg}`, marcacionData);
-            errors.push({
-              row: rowIndex + 1,
-              error: errorMsg,
-            });
+            errors.push({ row: rowIndex + 1, error: errorMsg });
             continue;
           }
 
@@ -185,10 +176,10 @@ export class AttendanceBulkUploadService {
               logger.error(`Error deleting marcacion at row ${rowIndex + 1}:`, deleteError);
               throw deleteError;
             }
-            
+
             // Crear nuevo registro
             try {
-              const newMarcacion = await MarcacionRepository.create(marcacionData);
+              await MarcacionRepository.create(marcacionData);
               createdCount++;
               logger.info(`Marcacion created: ${cedula} - ${date}`);
               processedRecords.push(marcacionData);
@@ -233,31 +224,6 @@ export class AttendanceBulkUploadService {
     }
   }
 
-  private getStringFromNormalized(normalizedRow: any, normalizedColumnName: string): string {
-    try {
-      const value = normalizedRow[normalizedColumnName];
-      if (value === undefined || value === null) {
-        logger.warn(`Column "${normalizedColumnName}" not found in normalized row. Available keys: ${Object.keys(normalizedRow).slice(0, 10).join(', ')}`);
-        return '';
-      }
-      return value ? String(value).trim() : '';
-    } catch (error) {
-      logger.error(`Error reading string from normalized column "${normalizedColumnName}":`, error);
-      return '';
-    }
-  }
-
-  private getNumberFromNormalized(normalizedRow: any, normalizedColumnName: string): number {
-    try {
-      const value = normalizedRow[normalizedColumnName];
-      if (value === undefined || value === null || value === '') return 0;
-      const num = parseFloat(String(value).replace(/[$,]/g, ''));
-      return isNaN(num) ? 0 : num;
-    } catch (error) {
-      logger.error(`Error reading number from normalized column "${normalizedColumnName}":`, error);
-      return 0;
-    }
-  }
 }
 
 export default new AttendanceBulkUploadService();

@@ -325,8 +325,8 @@ export class EmployeeRepository {
       const parts = (emp.hireDate as string).split('T')[0].split('-').map(Number);
       const mm = parts[1]; const dd = parts[2];
       const thisYear = today.getFullYear();
-      let next = new Date(thisYear, mm - 1, dd - 1);
-      if (next < today) next = new Date(thisYear + 1, mm - 1, dd - 1);
+      let next = new Date(thisYear, mm - 1, dd);
+      if (next < today) next = new Date(thisYear + 1, mm - 1, dd);
       const daysAway = Math.round((next.getTime() - today.getTime()) / 86400000);
       return daysAway >= 0 && daysAway <= daysUntilExpiry;
     });

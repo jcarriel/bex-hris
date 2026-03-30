@@ -106,7 +106,6 @@ describe('ReportService', () => {
       expect(report.totalEmployees).toBeGreaterThanOrEqual(0);
       expect(report.activeEmployees).toBeGreaterThanOrEqual(0);
       expect(report.inactiveEmployees).toBeGreaterThanOrEqual(0);
-      expect(report.terminatedEmployees).toBeGreaterThanOrEqual(0);
     });
 
     it('should include department breakdown', async () => {

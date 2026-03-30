@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
+import axios from 'axios';
 import cors from 'cors';
 import helmet from 'helmet';
 import multer from 'multer';
 import { initializeDatabase, getDatabase } from '@config/database';
-import { authMiddleware, adminMiddleware } from '@middleware/auth';
+import { authMiddleware, adminMiddleware, requireAction } from '@middleware/auth';
 import AuthController from '@controllers/AuthController';
 import UserAdminController from '@controllers/UserAdminController';
 import RoleController from '@controllers/RoleController';
@@ -25,7 +26,10 @@ import SocialCaseController from '@controllers/SocialCaseController';
 import EventDigestScheduler from '@services/EventDigestScheduler';
 import EventTypeConfigService from '@services/EventTypeConfigService';
 import AuditController from '@controllers/AuditController';
+import { LockerController } from '@controllers/LockerController';
 import DashboardController from '@controllers/DashboardController';
+import { MayordomoController } from '@controllers/MayordomoController';
+import NovedadController from '@controllers/NovedadController';
 import logger from '@utils/logger';
 import errorLogger from '@utils/errorLogger';
 
@@ -41,7 +45,7 @@ app.use(cors({
   origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Biometrico-Target', 'X-Biometrico-Token'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -56,6 +60,68 @@ app.get('/api/logs/errors', authMiddleware, (req, res) => {
   const lines = req.query.lines ? parseInt(req.query.lines as string) : 100;
   const errorLogs = errorLogger.getRecentErrors(lines);
   res.status(200).json({ success: true, data: errorLogs });
+});
+
+// Company settings routes
+app.get('/api/settings/company', authMiddleware, async (req, res) => {
+  try {
+    const db = getDatabase();
+    const row = await db.get(`SELECT value FROM app_settings WHERE key = 'company'`) as any;
+    res.json({ success: true, data: row ? JSON.parse(row.value) : {} });
+  } catch (e) { res.status(500).json({ success: false }); }
+});
+app.put('/api/settings/company', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const db = getDatabase();
+    const value = JSON.stringify(req.body);
+    await db.run(`INSERT INTO app_settings (key, value) VALUES ('company', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [value]);
+    res.json({ success: true, data: req.body });
+  } catch (e) { res.status(500).json({ success: false }); }
+});
+
+// ─── Biométrico proxy (evita CORS: el backend hace las peticiones a UTimeMaster) ───
+// El frontend envía el header X-Biometrico-Target con la URL base de UTimeMaster
+// Ej: X-Biometrico-Target: http://192.168.20.3:8081
+
+app.post('/api/biometrico/auth', authMiddleware, async (req: any, res: any) => {
+  const target = req.headers['x-biometrico-target'] as string;
+  if (!target) return res.status(400).json({ success: false, message: 'Falta header X-Biometrico-Target' });
+  try {
+    const response = await axios.post(`${target}/jwt-api-token-auth/`, req.body, { timeout: 10000 });
+    res.json(response.data);
+  } catch (e: any) {
+    const status = e?.response?.status ?? 502;
+    res.status(status).json(e?.response?.data ?? { detail: 'Error conectando a UTimeMaster' });
+  }
+});
+
+// app.use monta el handler en el prefijo — req.path contiene solo el sufijo (/api/iclock/...)
+app.use('/api/biometrico/proxy', authMiddleware, async (req: any, res: any) => {
+  const target = req.headers['x-biometrico-target'] as string;
+  if (!target) return res.status(400).json({ success: false, message: 'Falta header X-Biometrico-Target' });
+
+  const url = `${target}${req.path}`;
+  logger.info(`[Biometrico Proxy] ${req.method} ${url}`);
+
+  try {
+    const response = await axios({
+      method:  req.method,
+      url,
+      params:  req.query,
+      data:    ['POST', 'PUT', 'PATCH'].includes(req.method) ? req.body : undefined,
+      headers: {
+        ...(req.headers['x-biometrico-token'] ? { Authorization: `JWT ${req.headers['x-biometrico-token']}` } : {}),
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
+    logger.info(`[Biometrico Proxy] Response ${response.status} from ${url}`);
+    res.status(response.status).json(response.data);
+  } catch (e: any) {
+    const status = e?.response?.status ?? 502;
+    logger.warn(`[Biometrico Proxy] Error ${status} from ${url}: ${JSON.stringify(e?.response?.data)}`);
+    res.status(status).json(e?.response?.data ?? { detail: 'Error en proxy biométrico' });
+  }
 });
 
 // Auth routes
@@ -86,27 +152,27 @@ app.delete('/api/roles/:id',  authMiddleware, adminMiddleware,   (req, res) => R
 app.get('/api/dashboard/stats', authMiddleware, (req, res) => DashboardController.getStats(req, res));
 
 // Employee routes
-app.post('/api/employees', authMiddleware, (req, res) => EmployeeController.create(req, res));
+app.post('/api/employees', authMiddleware, requireAction('empleados:crear'), (req, res) => EmployeeController.create(req, res));
 app.get('/api/employees', authMiddleware, (req, res) => EmployeeController.getAll(req, res));
 app.get('/api/employees/count', authMiddleware, (req, res) => EmployeeController.getAllCountEmployees(req, res));
-app.delete('/api/employees/clear', authMiddleware, (req, res) => ResourceController.clearEmployees(req, res));
+app.delete('/api/employees/clear', authMiddleware, adminMiddleware, (req, res) => ResourceController.clearEmployees(req, res));
 app.get('/api/employees/contracts/expiring', authMiddleware, (req, res) =>
   EmployeeController.getExpiringContracts(req, res)
 );
-app.get('/api/employees/:id', authMiddleware, (req, res) => EmployeeController.getById(req, res));
-app.put('/api/employees/:id', authMiddleware, (req, res) => EmployeeController.update(req, res));
-app.delete('/api/employees/:id', authMiddleware, (req, res) =>
+app.get('/api/employees/:id', authMiddleware, requireAction('empleados:ver'), (req, res) => EmployeeController.getById(req, res));
+app.put('/api/employees/:id', authMiddleware, requireAction('empleados:editar'), (req, res) => EmployeeController.update(req, res));
+app.delete('/api/employees/:id', authMiddleware, requireAction('empleados:eliminar'), (req, res) =>
   EmployeeController.delete(req, res)
 );
-app.post('/api/employees/:id/terminate', authMiddleware, (req, res) =>
+app.post('/api/employees/:id/terminate', authMiddleware, requireAction('empleados:editar'), (req, res) =>
   EmployeeController.terminate(req, res)
 );
 
 // Department routes
-app.post('/api/departments', authMiddleware, (req, res) => ResourceController.createDepartment(req, res));
+app.post('/api/departments', authMiddleware, requireAction('tablas:crear'), (req, res) => ResourceController.createDepartment(req, res));
 app.get('/api/departments', authMiddleware, (req, res) => ResourceController.getDepartments(req, res));
-app.put('/api/departments/:id', authMiddleware, (req, res) => ResourceController.updateDepartment(req, res));
-app.delete('/api/departments/:id', authMiddleware, (req, res) => ResourceController.deleteDepartment(req, res));
+app.put('/api/departments/:id', authMiddleware, requireAction('tablas:editar'), (req, res) => ResourceController.updateDepartment(req, res));
+app.delete('/api/departments/:id', authMiddleware, requireAction('tablas:eliminar'), (req, res) => ResourceController.deleteDepartment(req, res));
 
 // Department Schedule Configuration routes
 app.post('/api/department-schedules', authMiddleware, (req, res) => ResourceController.createOrUpdateDepartmentSchedule(req, res));
@@ -116,50 +182,45 @@ app.get('/api/department-schedules/department/:departmentId', authMiddleware, (r
 app.delete('/api/department-schedules/:id', authMiddleware, (req, res) => ResourceController.deleteDepartmentSchedule(req, res));
 
 // Position routes
-app.post('/api/positions', authMiddleware, (req, res) => ResourceController.createPosition(req, res));
+app.post('/api/positions', authMiddleware, requireAction('tablas:crear'), (req, res) => ResourceController.createPosition(req, res));
 app.get('/api/positions', authMiddleware, (req, res) => ResourceController.getPositions(req, res));
-app.put('/api/positions/:id', authMiddleware, (req, res) => ResourceController.updatePosition(req, res));
-app.delete('/api/positions/:id', authMiddleware, (req, res) => ResourceController.deletePosition(req, res));
+app.put('/api/positions/:id', authMiddleware, requireAction('tablas:editar'), (req, res) => ResourceController.updatePosition(req, res));
+app.delete('/api/positions/:id', authMiddleware, requireAction('tablas:eliminar'), (req, res) => ResourceController.deletePosition(req, res));
 
 // Labor routes
-app.post('/api/labors', authMiddleware, (req, res) => ResourceController.createLabor(req, res));
+app.post('/api/labors', authMiddleware, requireAction('tablas:crear'), (req, res) => ResourceController.createLabor(req, res));
 app.get('/api/labors', authMiddleware, (req, res) => ResourceController.getLabors(req, res));
-app.put('/api/labors/:id', authMiddleware, (req, res) => ResourceController.updateLabor(req, res));
-app.delete('/api/labors/:id', authMiddleware, (req, res) => ResourceController.deleteLabor(req, res));
+app.put('/api/labors/:id', authMiddleware, requireAction('tablas:editar'), (req, res) => ResourceController.updateLabor(req, res));
+app.delete('/api/labors/:id', authMiddleware, requireAction('tablas:eliminar'), (req, res) => ResourceController.deleteLabor(req, res));
 
 // Catalog routes
 app.get('/api/catalogs/:type', authMiddleware, (req, res) => CatalogController.getByType(req, res));
-app.post('/api/catalogs', authMiddleware, (req, res) => CatalogController.create(req, res));
-app.put('/api/catalogs/:id', authMiddleware, (req, res) => CatalogController.update(req, res));
-app.delete('/api/catalogs/:id', authMiddleware, (req, res) => CatalogController.delete(req, res));
+app.post('/api/catalogs', authMiddleware, requireAction('tablas:crear'), (req, res) => CatalogController.create(req, res));
+app.put('/api/catalogs/:id', authMiddleware, requireAction('tablas:editar'), (req, res) => CatalogController.update(req, res));
+app.delete('/api/catalogs/:id', authMiddleware, requireAction('tablas:eliminar'), (req, res) => CatalogController.delete(req, res));
 
-// Document Generator routes
-app.post('/api/document-templates', authMiddleware, (req, res) => ResourceController.createDocumentTemplate(req, res));
-app.post('/api/document-templates/upload', authMiddleware, upload.single('file'), (req, res) => ResourceController.uploadDocumentTemplate(req, res));
-app.get('/api/document-templates', authMiddleware, (req, res) => ResourceController.getDocumentTemplates(req, res));
-app.put('/api/document-templates/:id', authMiddleware, (req, res) => ResourceController.updateDocumentTemplate(req, res));
-app.delete('/api/document-templates/:id', authMiddleware, (req, res) => ResourceController.deleteDocumentTemplate(req, res));
-
-app.post('/api/generated-documents', authMiddleware, (req, res) => ResourceController.generateDocument(req, res));
-app.get('/api/generated-documents', authMiddleware, (req, res) => ResourceController.getGeneratedDocuments(req, res));
-app.get('/api/generated-documents/:id/download', authMiddleware, (req, res) => ResourceController.downloadGeneratedDocument(req, res));
+// Maestro General routes
+app.get('/api/maestro-general',        authMiddleware, (req, res) => ResourceController.getMaestroGeneral(req, res));
+app.post('/api/maestro-general',       authMiddleware, (req, res) => ResourceController.createMaestro(req, res));
+app.put('/api/maestro-general/:id',    authMiddleware, (req, res) => ResourceController.updateMaestro(req, res));
+app.delete('/api/maestro-general/:id', authMiddleware, (req, res) => ResourceController.deleteMaestro(req, res));
 
 // Bulk upload route
-app.post('/api/bulk-upload', authMiddleware, upload.single('file'), (req, res) => ResourceController.bulkUpload(req, res));
+app.post('/api/bulk-upload', authMiddleware, requireAction('carga-masiva:crear'), upload.single('file'), (req, res) => ResourceController.bulkUpload(req, res));
 app.post('/api/employees/register-not-found', authMiddleware, (req, res) => ResourceController.registerNotFoundEmployees(req, res));
 app.delete('/api/employees/clear', authMiddleware, (req, res) => ResourceController.clearEmployees(req, res));
 
 // Payroll routes
-app.post('/api/payroll', authMiddleware, (req, res) => ResourceController.createPayroll(req, res));
+app.post('/api/payroll', authMiddleware, requireAction('nomina'), (req, res) => ResourceController.createPayroll(req, res));
 app.get('/api/payroll', authMiddleware, (req, res) => ResourceController.getAllPayrolls(req, res));
-app.delete('/api/payroll/clear', authMiddleware, (req, res) => ResourceController.clearPayrolls(req, res));
-app.delete('/api/payroll/period/:year/:month', authMiddleware, (req, res) => ResourceController.deletePayrollByPeriod(req, res));
+app.delete('/api/payroll/clear', authMiddleware, adminMiddleware, (req, res) => ResourceController.clearPayrolls(req, res));
+app.delete('/api/payroll/period/:year/:month', authMiddleware, requireAction('nomina:eliminar'), (req, res) => ResourceController.deletePayrollByPeriod(req, res));
 app.get('/api/payroll/period/:year/:month', authMiddleware, (req, res) => ResourceController.getPayrollByPeriod(req, res));
 app.get('/api/payroll/sum/:year/:month', authMiddleware, (req, res) => ResourceController.getPayrollSumByPeriod(req, res));
 app.get('/api/payroll/employee/:employeeId', authMiddleware, (req, res) => ResourceController.getPayrollByEmployee(req, res));
 app.get('/api/payroll/:id', authMiddleware, (req, res) => ResourceController.getPayroll(req, res));
-app.put('/api/payroll/:id', authMiddleware, (req, res) => ResourceController.updatePayroll(req, res));
-app.delete('/api/payroll/:id', authMiddleware, (req, res) => ResourceController.deletePayroll(req, res));
+app.put('/api/payroll/:id', authMiddleware, requireAction('nomina'), (req, res) => ResourceController.updatePayroll(req, res));
+app.delete('/api/payroll/:id', authMiddleware, requireAction('nomina:eliminar'), (req, res) => ResourceController.deletePayroll(req, res));
 
 // Attendance routes
 app.post('/api/attendance', authMiddleware, (req, res) => ResourceController.createAttendance(req, res));
@@ -182,54 +243,56 @@ app.get('/api/marcacion/cedula/:cedula', authMiddleware, (req, res) => ResourceC
 app.get('/api/marcacion/month/:month', authMiddleware, (req, res) => ResourceController.getMarcacionByMonth(req, res));
 app.get('/api/marcacion/cedula/:cedula/month/:month', authMiddleware, (req, res) => ResourceController.getMarcacionByCedulaAndMonth(req, res));
 app.put('/api/marcacion/:id', authMiddleware, (req, res) => ResourceController.updateMarcacion(req, res));
-app.delete('/api/marcacion/period', authMiddleware, (req, res) => ResourceController.deleteMarcacionByPeriod(req, res));
-app.delete('/api/marcacion/month/:month', authMiddleware, (req, res) => ResourceController.deleteMarcacionByMonth(req, res));
-app.delete('/api/marcacion/:id', authMiddleware, (req, res) => ResourceController.deleteMarcacion(req, res));
+app.delete('/api/marcacion/period', authMiddleware, requireAction('asistencia:eliminar'), (req, res) => ResourceController.deleteMarcacionByPeriod(req, res));
+app.delete('/api/marcacion/month/:month', authMiddleware, requireAction('asistencia:eliminar'), (req, res) => ResourceController.deleteMarcacionByMonth(req, res));
+app.delete('/api/marcacion/:id', authMiddleware, requireAction('asistencia:eliminar'), (req, res) => ResourceController.deleteMarcacion(req, res));
 
 // Leave routes
 app.get('/api/leaves', authMiddleware, (req, res) => ResourceController.getAllLeaves(req, res));
-app.post('/api/leaves', authMiddleware, (req, res) => ResourceController.createLeave(req, res));
+app.post('/api/leaves', authMiddleware, requireAction('bienestar:crear'), (req, res) => ResourceController.createLeave(req, res));
 app.get('/api/leaves/pending', authMiddleware, (req, res) => ResourceController.getPendingLeaves(req, res));
 app.get('/api/leaves/balance/:employeeId', authMiddleware, (req, res) => ResourceController.getLeaveBalance(req, res));
 app.get('/api/leaves/:employeeId', authMiddleware, (req, res) => ResourceController.getLeaveByEmployee(req, res));
-app.post('/api/leaves/:id/approve', authMiddleware, (req, res) => ResourceController.approveLeave(req, res));
-app.post('/api/leaves/:id/reject', authMiddleware, (req, res) => ResourceController.rejectLeave(req, res));
-app.put('/api/leaves/:id', authMiddleware, (req, res) => ResourceController.updateLeave(req, res));
-app.delete('/api/leaves/:id', authMiddleware, (req, res) => ResourceController.deleteLeave(req, res));
+app.post('/api/leaves/:id/approve', authMiddleware, requireAction('bienestar:aprobar'), (req, res) => ResourceController.approveLeave(req, res));
+app.post('/api/leaves/:id/reject', authMiddleware, requireAction('bienestar:aprobar'), (req, res) => ResourceController.rejectLeave(req, res));
+app.put('/api/leaves/:id', authMiddleware, requireAction('bienestar:editar'), (req, res) => ResourceController.updateLeave(req, res));
+app.delete('/api/leaves/:id', authMiddleware, requireAction('bienestar:eliminar'), (req, res) => ResourceController.deleteLeave(req, res));
+
+// Novedades routes
+app.get('/api/novedades',                         authMiddleware, (req, res) => NovedadController.getAll(req, res));
+app.post('/api/novedades',                        authMiddleware, requireAction('bienestar:crear'), (req, res) => NovedadController.create(req, res));
+app.get('/api/novedades/employee/:employeeId',    authMiddleware, (req, res) => NovedadController.getByEmployee(req, res));
+app.put('/api/novedades/:id',                     authMiddleware, requireAction('bienestar:editar'), (req, res) => NovedadController.update(req, res));
+app.delete('/api/novedades/:id',                  authMiddleware, requireAction('bienestar:eliminar'), (req, res) => NovedadController.delete(req, res));
 
 // Social Cases routes
 app.get('/api/social-cases', authMiddleware, (req, res) => SocialCaseController.getAll(req, res));
-app.post('/api/social-cases', authMiddleware, (req, res) => SocialCaseController.create(req, res));
+app.post('/api/social-cases', authMiddleware, requireAction('bienestar:crear'), (req, res) => SocialCaseController.create(req, res));
 app.get('/api/social-cases/employee/:employeeId', authMiddleware, (req, res) => SocialCaseController.getByEmployee(req, res));
-app.put('/api/social-cases/:id', authMiddleware, (req, res) => SocialCaseController.update(req, res));
-app.delete('/api/social-cases/:id', authMiddleware, (req, res) => SocialCaseController.delete(req, res));
+app.put('/api/social-cases/:id', authMiddleware, requireAction('bienestar:editar'), (req, res) => SocialCaseController.update(req, res));
+app.delete('/api/social-cases/:id', authMiddleware, requireAction('bienestar:eliminar'), (req, res) => SocialCaseController.delete(req, res));
 
-// Document routes
-app.post('/api/documents/upload', authMiddleware, upload.single('file'), (req, res) => ResourceController.uploadDocument(req, res));
-app.get('/api/documents', authMiddleware, (req, res) => ResourceController.getAllDocuments(req, res));
-app.get('/api/documents/employee/:employeeId', authMiddleware, (req, res) => ResourceController.getDocumentsByEmployee(req, res));
-app.get('/api/documents/type/:type', authMiddleware, (req, res) => ResourceController.getDocumentsByType(req, res));
-app.delete('/api/documents/:id', authMiddleware, (req, res) => ResourceController.deleteDocument(req, res));
-app.get('/api/documents/:id/download', authMiddleware, (req, res) => ResourceController.downloadDocument(req, res));
-
-// Document Categories routes
-app.post('/api/document-categories', authMiddleware, (req, res) => ResourceController.createDocumentCategory(req, res));
-app.get('/api/document-categories', authMiddleware, (req, res) => ResourceController.getDocumentCategories(req, res));
-app.put('/api/document-categories/:id', authMiddleware, (req, res) => ResourceController.updateDocumentCategory(req, res));
-app.delete('/api/document-categories/:id', authMiddleware, (req, res) => ResourceController.deleteDocumentCategory(req, res));
+// Lockers routes
+app.get('/api/lockers/stats',    authMiddleware, (req, res) => LockerController.getStats(req, res));
+app.get('/api/lockers/sections', authMiddleware, (req, res) => LockerController.getSections(req, res));
+app.get('/api/lockers',          authMiddleware, (req, res) => LockerController.getAll(req, res));
+app.post('/api/lockers',         authMiddleware, requireAction('casilleros:crear'), (req, res) => LockerController.create(req, res));
+app.get('/api/lockers/:id',      authMiddleware, (req, res) => LockerController.getById(req, res));
+app.put('/api/lockers/:id',      authMiddleware, requireAction('casilleros:editar'), (req, res) => LockerController.update(req, res));
+app.delete('/api/lockers/:id',   authMiddleware, requireAction('casilleros:eliminar'), (req, res) => LockerController.delete(req, res));
 
 // Tasks routes (new TaskController)
 app.get('/api/tasks/my',            authMiddleware, (req, res) => TaskController.getMyTasks(req, res));
 app.get('/api/tasks/stats',         authMiddleware, (req, res) => TaskController.getStats(req, res));
 app.get('/api/tasks',               authMiddleware, (req, res) => TaskController.getAll(req, res));
-app.post('/api/tasks',              authMiddleware, (req, res) => TaskController.create(req, res));
+app.post('/api/tasks',              authMiddleware, requireAction('tareas:crear'), (req, res) => TaskController.create(req, res));
 app.get('/api/tasks/:id/comments',  authMiddleware, (req, res) => TaskController.getComments(req, res));
 app.post('/api/tasks/:id/comments', authMiddleware, (req, res) => TaskController.addComment(req, res));
 app.put('/api/tasks/:id/status',    authMiddleware, (req, res) => TaskController.changeStatus(req, res));
 app.put('/api/tasks/:id/reassign',  authMiddleware, (req, res) => TaskController.reassign(req, res));
 app.get('/api/tasks/:id',           authMiddleware, (req, res) => TaskController.getById(req, res));
 app.put('/api/tasks/:id',           authMiddleware, (req, res) => TaskController.update(req, res));
-app.delete('/api/tasks/:id',        authMiddleware, (req, res) => TaskController.delete(req, res));
+app.delete('/api/tasks/:id',        authMiddleware, requireAction('tareas:eliminar'), (req, res) => TaskController.delete(req, res));
 
 // Users list (for task assignment - all authenticated users)
 app.get('/api/users', authMiddleware, async (req, res) => {
@@ -290,10 +353,18 @@ app.put('/api/event-configs/:type', authMiddleware, (req, res) => EventControlle
 
 // Workforce routes
 app.get('/api/workforce',     authMiddleware, (req, res) => WorkforceController.getAll(req, res));
-app.post('/api/workforce',    authMiddleware, (req, res) => WorkforceController.create(req, res));
+app.post('/api/workforce',    authMiddleware, requireAction('fuerza-laboral:crear'), (req, res) => WorkforceController.create(req, res));
 app.get('/api/workforce/:id', authMiddleware, (req, res) => WorkforceController.getById(req, res));
-app.put('/api/workforce/:id', authMiddleware, (req, res) => WorkforceController.update(req, res));
-app.delete('/api/workforce/:id', authMiddleware, (req, res) => WorkforceController.delete(req, res));
+app.put('/api/workforce/:id', authMiddleware, requireAction('fuerza-laboral:editar'), (req, res) => WorkforceController.update(req, res));
+app.delete('/api/workforce/:id', authMiddleware, requireAction('fuerza-laboral:eliminar'), (req, res) => WorkforceController.delete(req, res));
+
+// Mayordomos routes
+app.get('/api/mayordomos',                         authMiddleware, (req, res) => MayordomoController.getAll(req, res));
+app.post('/api/mayordomos',                        authMiddleware, requireAction('mayordomos:crear'), (req, res) => MayordomoController.create(req, res));
+app.put('/api/mayordomos/:id',                     authMiddleware, requireAction('mayordomos:crear'), (req, res) => MayordomoController.update(req, res));
+app.delete('/api/mayordomos/:id',                  authMiddleware, requireAction('mayordomos:eliminar'), (req, res) => MayordomoController.delete(req, res));
+app.post('/api/mayordomos/:id/employees',          authMiddleware, requireAction('mayordomos:crear'), (req, res) => MayordomoController.assignEmployee(req, res));
+app.delete('/api/mayordomos/employees/:employeeId',authMiddleware, requireAction('mayordomos:crear'), (req, res) => MayordomoController.removeEmployee(req, res));
 
 // Reports routes
 app.post('/api/reports/payroll', authMiddleware, (req, res) => ResourceController.generatePayrollReport(req, res));

@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '@middleware/auth';
 import EmployeeService from '@services/EmployeeService';
 import logger from '@utils/logger';
+import { logAudit } from '@utils/audit';
 
 export class EmployeeController {
   async create(req: AuthRequest, res: Response): Promise<void> {
@@ -17,6 +18,7 @@ export class EmployeeController {
       }
 
       const employee = await EmployeeService.createEmployee(employeeData);
+      logAudit(req.userId, 'CREATE', 'employee', employee.id);
 
       res.status(201).json({
         success: true,
@@ -120,6 +122,8 @@ export class EmployeeController {
         return;
       }
 
+      logAudit(req.userId, 'UPDATE', 'employee', id);
+
       res.status(200).json({
         success: true,
         message: 'Employee updated successfully',
@@ -147,6 +151,8 @@ export class EmployeeController {
         });
         return;
       }
+
+      logAudit(req.userId, 'DELETE', 'employee', id);
 
       res.status(200).json({
         success: true,
@@ -184,9 +190,11 @@ export class EmployeeController {
         return;
       }
 
+      logAudit(req.userId, 'TERMINATE', 'employee', id, { reason, terminationDate });
+
       res.status(200).json({
         success: true,
-        message: 'Employee terminated successfully',
+        message: 'Employee status updated successfully',
         data: employee,
       });
     } catch (error) {

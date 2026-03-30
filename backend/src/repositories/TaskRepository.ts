@@ -1,4 +1,4 @@
-import { Database } from 'sqlite';
+import type { DbAdapter as Database } from '@config/database';
 import { v4 as uuidv4 } from 'uuid';
 
 export class TaskRepository {

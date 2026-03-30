@@ -64,7 +64,6 @@ interface EmployeeReport {
   totalEmployees: number;
   activeEmployees: number;
   inactiveEmployees: number;
-  terminatedEmployees: number;
   byDepartment: {
     departmentId: string;
     count: number;
@@ -290,7 +289,6 @@ export class ReportService {
 
       let activeCount = 0;
       let inactiveCount = 0;
-      let terminatedCount = 0;
 
       for (const emp of employeeList) {
         const status = (emp as any).status || 'active';
@@ -300,7 +298,6 @@ export class ReportService {
         // Contar por estado
         if (status === 'active') activeCount++;
         else if (status === 'inactive') inactiveCount++;
-        else if (status === 'terminated') terminatedCount++;
 
         // Contar por departamento
         if (!byDepartment[deptId]) {
@@ -326,7 +323,6 @@ export class ReportService {
         totalEmployees: employeeList.length,
         activeEmployees: activeCount,
         inactiveEmployees: inactiveCount,
-        terminatedEmployees: terminatedCount,
         byDepartment: Object.values(byDepartment),
         byPosition: Object.values(byPosition),
         newHires: [],

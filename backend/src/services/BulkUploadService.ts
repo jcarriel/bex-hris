@@ -209,7 +209,7 @@ export class BulkUploadService {
     const id = uuidv4();
     const now = new Date().toISOString();
     await db.run(
-      `INSERT OR IGNORE INTO catalogs (id, type, value, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO catalogs (id, type, value, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
       [id, type, value, now, now]
     );
     const row = await db.get('SELECT id FROM catalogs WHERE type = ? AND value = ?', [type, value]);

@@ -23,8 +23,9 @@ export class EventTypeConfigRepository {
     const now = new Date().toISOString();
     for (const d of DEFAULTS) {
       await db.run(
-        `INSERT OR IGNORE INTO event_type_configs (type, daysNotice, enabled, updatedAt)
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO event_type_configs (type, daysNotice, enabled, updatedAt)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (type) DO NOTHING`,
         [d.type, d.daysNotice, d.enabled ? 1 : 0, now],
       );
     }

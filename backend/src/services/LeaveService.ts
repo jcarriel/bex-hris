@@ -76,9 +76,14 @@ export class LeaveService {
     }
   }
 
-  async rejectLeave(id: string): Promise<Leave | null> {
+  async rejectLeave(id: string, rejectedBy?: string): Promise<Leave | null> {
     try {
-      const leave = await LeaveRepository.update(id, { status: 'rejected' });
+      const now = new Date().toISOString();
+      const leave = await LeaveRepository.update(id, {
+        status: 'rejected',
+        approvedBy: rejectedBy || null,
+        approvedDate: now,
+      });
       logger.info(`Leave rejected: ${id}`);
       return leave;
     } catch (error) {

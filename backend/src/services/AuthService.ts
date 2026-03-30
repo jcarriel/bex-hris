@@ -83,6 +83,7 @@ export class AuthService {
         { expiresIn: (process.env.JWT_EXPIRATION || '7d') as string | number } as any
       );
 
+      await UserRepository.update(user.id, { lastLoginAt: new Date().toISOString() } as any);
       logger.info(`User logged in: ${username}`);
 
       return {
@@ -94,6 +95,7 @@ export class AuthService {
           email: user.email,
           role: userRole,
           roleId: userRoleId,
+          employeeId: (user as any).employeeId || null,
           permissions,
         },
       };

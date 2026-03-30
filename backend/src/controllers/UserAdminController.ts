@@ -42,7 +42,7 @@ class UserAdminController {
 
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { nombre, username, email, roleId } = req.body;
+      const { nombre, username, email, roleId, employeeId } = req.body;
 
       if (!nombre || !username || !email) {
         res.status(400).json({ success: false, message: 'Nombre, usuario y email son requeridos' });
@@ -72,6 +72,7 @@ class UserAdminController {
         roleId: roleId || null,
         role: 'user',
         status: 'active',
+        employeeId: employeeId || null,
       });
 
       // Send welcome email
@@ -101,13 +102,14 @@ class UserAdminController {
   async update(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { nombre, email, roleId, status } = req.body;
+      const { nombre, email, roleId, status, employeeId } = req.body;
 
       const updateData: Record<string, unknown> = {};
-      if (nombre  !== undefined) updateData.nombre  = nombre;
-      if (email   !== undefined) updateData.email   = email;
-      if (roleId  !== undefined) updateData.roleId  = roleId || null;
-      if (status  !== undefined) updateData.status  = status;
+      if (nombre     !== undefined) updateData.nombre     = nombre;
+      if (email      !== undefined) updateData.email      = email;
+      if (roleId     !== undefined) updateData.roleId     = roleId || null;
+      if (status     !== undefined) updateData.status     = status;
+      if (employeeId !== undefined) updateData.employeeId = employeeId || null;
 
       const user = await UserRepository.update(id, updateData);
       if (!user) {

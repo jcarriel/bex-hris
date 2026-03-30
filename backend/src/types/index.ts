@@ -46,7 +46,7 @@ export interface Employee {
   contratoTipo: string;
   contratoActual?: string;
   contractEndDate?: string;
-  status: 'active' | 'inactive' | 'on_leave' | 'terminated';
+  status: 'active' | 'inactive';
   terminationDate?: string;
   terminationReason?: string;
   baseSalary: number;
@@ -179,7 +179,7 @@ export interface Marcacion {
 export interface Leave {
   id: string;
   employeeId: string;
-  type: 'vacation' | 'medical' | 'maternity' | 'personal' | 'unpaid';
+  type: 'vacation' | 'medical' | 'maternity' | 'personal';
   startDate: string;
   endDate: string;
   days: number;

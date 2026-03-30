@@ -9,11 +9,22 @@ export default class DashboardController {
       const year = now.getFullYear()
       const month = now.getMonth() + 1
 
-      // Total active employees
+      // Total employees (all statuses)
       const totalRow = await db.get(
-        `SELECT COUNT(*) as c FROM employees WHERE status = 'active'`
+        `SELECT COUNT(*) as c FROM employees`
       ) as any
       const totalEmployees = totalRow.c
+
+      // Employee status breakdown (for donut chart)
+      const statusRows = await db.all(
+        `SELECT status, COUNT(*) as count FROM employees GROUP BY status`
+      ) as any[]
+      const statusBreakdown = { active: 0, inactive: 0 }
+      for (const row of statusRows) {
+        if (row.status in statusBreakdown) {
+          (statusBreakdown as any)[row.status] = row.count
+        }
+      }
 
       // Employees hired this month
       const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
@@ -29,33 +40,65 @@ export default class DashboardController {
       ) as any
       const pendingLeaves = pendingRow.c
 
-      // Payroll sum for current month (uses netSalary alias totalToPay in this schema)
+      // Pending novedades
+      const novedadesRow = await db.get(
+        `SELECT COUNT(*) as c FROM novedades WHERE status = 'pending'`
+      ) as any
+      const pendingNovedades = novedadesRow?.c ?? 0
+
+      // Payroll sum for previous month
+      const prevDate = new Date(year, month - 2, 1)
+      const prevYear = prevDate.getFullYear()
+      const prevMonth = prevDate.getMonth() + 1
       const payrollRow = await db.get(
         `SELECT COALESCE(SUM(totalToPay), 0) as total FROM payroll WHERE year = ? AND month = ?`,
-        [year, month]
+        [prevYear, prevMonth]
       ) as any
       const payrollSum = payrollRow.total
 
-      // Expiring contracts (next 30 days, anniversary-based — same logic as birthdays)
+      // Expiring contracts — anniversary-based (same logic for count AND list)
       const todayMidnight = new Date(now); todayMidnight.setHours(0, 0, 0, 0);
       const contractCandidates = await db.all(
-        `SELECT e.hireDate FROM employees e
+        `SELECT e.id, e.firstName, e.lastName, e.hireDate, e.contractEndDate,
+                c.name as positionName, cc.name as departmentName
+         FROM employees e
+         LEFT JOIN cargos c ON e.positionId = c.id
+         LEFT JOIN centros_costo cc ON e.departmentId = cc.id
          LEFT JOIN catalogs ca ON e.contratoActualId = ca.id AND ca.type = 'contrato_actual'
          WHERE e.hireDate IS NOT NULL
-         AND e.status = 'active'
-         AND (COALESCE(ca.value, e.contratoActual) IS NULL OR COALESCE(ca.value, e.contratoActual) != 'CT- INDEFINIDO JORNADA COMPLETA')`
+           AND e.status = 'active'
+           AND (COALESCE(ca.value, e.contratoActual) IS NULL
+                OR COALESCE(ca.value, e.contratoActual) != 'CT- INDEFINIDO JORNADA COMPLETA')`
       ) as any[]
-      const expiringContracts = contractCandidates.filter((row) => {
-        const parts = (row.hireDate as string).split('T')[0].split('-').map(Number);
-        const mm = parts[1]; const dd = parts[2];
-        const thisYear = todayMidnight.getFullYear();
-        let next = new Date(thisYear, mm - 1, dd - 1);
-        if (next < todayMidnight) next = new Date(thisYear + 1, mm - 1, dd - 1);
-        const daysAway = Math.round((next.getTime() - todayMidnight.getTime()) / 86400000);
-        return daysAway >= 0 && daysAway <= 30;
-      }).length
 
-      // Employees by department (uses centros_costo)
+      const withDays = contractCandidates
+        .map((row) => {
+          // Prefer explicit contractEndDate if set
+          if (row.contractEndDate && row.contractEndDate.length >= 10) {
+            const endDate = new Date(row.contractEndDate.slice(0, 10) + 'T00:00:00');
+            const daysAway = Math.round((endDate.getTime() - todayMidnight.getTime()) / 86400000);
+            return { ...row, daysAway };
+          }
+          // Fall back to hireDate anniversary
+          const parts = (row.hireDate as string).split('T')[0].split('-').map(Number);
+          const mm = parts[1]; const dd = parts[2];
+          const thisYear = todayMidnight.getFullYear();
+          let next = new Date(thisYear, mm - 1, dd - 1);
+          if (next < todayMidnight) next = new Date(thisYear + 1, mm - 1, dd - 1);
+          const daysAway = Math.round((next.getTime() - todayMidnight.getTime()) / 86400000);
+          return { ...row, daysAway };
+        })
+        .filter((row) => row.daysAway >= 0 && row.daysAway <= 30)
+        .sort((a, b) => a.daysAway - b.daysAway)
+        .slice(0, 10);
+
+      const expiringContracts = withDays.length;
+      const expiringContractsList = withDays.map(({ id, firstName, lastName, positionName, departmentName, daysAway, contractEndDate }) => ({
+        id, firstName, lastName, positionName, departmentName, daysAway,
+        contractEndDate: contractEndDate || null,
+      }));
+
+      // Employees by department
       const byDepartment = await db.all(`
         SELECT cc.name, COUNT(e.id) as value
         FROM centros_costo cc
@@ -76,7 +119,7 @@ export default class DashboardController {
         LIMIT 5
       `)
 
-      // Recent audit logs (activity feed)
+      // Recent audit logs
       const recentActivity = await db.all(`
         SELECT al.action, al.entityType, al.createdAt,
                u.nombre as userName
@@ -90,10 +133,13 @@ export default class DashboardController {
         success: true,
         data: {
           totalEmployees,
+          statusBreakdown,
           newThisMonth,
           pendingLeaves,
+          pendingNovedades,
           payrollSum,
           expiringContracts,
+          expiringContractsList,
           byDepartment,
           recentEmployees,
           recentActivity,

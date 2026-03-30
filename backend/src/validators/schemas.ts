@@ -43,7 +43,7 @@ export const createEmployeeSchema = z.object({
   earnedSalary: z.number().positive('Salary must be positive').optional(),
   contractStartDate: z.string().datetime().optional(),
   contractEndDate: z.string().datetime().optional(),
-  status: z.enum(['active', 'inactive', 'terminated']).default('active'),
+  status: z.enum(['active', 'inactive']).default('active'),
   employeeNumber: z.string().optional(),
 });
 
@@ -94,7 +94,7 @@ export const createLeaveSchema = z.object({
   employeeId: z.string().uuid('Invalid employee ID'),
   startDate: z.string().datetime('Invalid date format'),
   endDate: z.string().datetime('Invalid date format'),
-  leaveType: z.enum(['vacation', 'sick', 'personal', 'unpaid', 'maternity']),
+  leaveType: z.enum(['vacation', 'sick', 'personal', 'maternity']),
   reason: z.string().min(10, 'Reason must be at least 10 characters').max(500),
   status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
 }).refine(

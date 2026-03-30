@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import RoleService from '@services/RoleService';
 import logger from '@utils/logger';
 
 export interface AuthRequest extends Request {
@@ -46,6 +47,42 @@ export const adminMiddleware = (req: AuthRequest, res: Response, next: NextFunct
   }
   next();
 };
+
+/**
+ * Middleware factory that enforces action-level permissions.
+ * Admin role bypasses all checks. For other roles, the role's permissions
+ * array must include '*' or the specific action string (e.g. 'empleados:crear').
+ */
+export function requireAction(action: string) {
+  return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    // Admin bypasses all action checks
+    if (req.userRole === 'admin') { next(); return; }
+
+    // No role assigned → deny
+    if (!req.userRoleId) {
+      res.status(403).json({ success: false, message: 'No tienes permiso para realizar esta acción' });
+      return;
+    }
+
+    try {
+      const role = await RoleService.findById(req.userRoleId);
+      if (!role) {
+        res.status(403).json({ success: false, message: 'No tienes permiso para realizar esta acción' });
+        return;
+      }
+
+      const perms = role.permissions;
+      if (perms.includes('*') || perms.includes(action)) {
+        next();
+      } else {
+        res.status(403).json({ success: false, message: 'No tienes permiso para realizar esta acción' });
+      }
+    } catch (err) {
+      logger.error('requireAction error', err);
+      res.status(500).json({ success: false, message: 'Error al verificar permisos' });
+    }
+  };
+}
 
 export const optionalAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
   try {

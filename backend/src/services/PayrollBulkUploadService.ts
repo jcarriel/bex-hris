@@ -344,39 +344,72 @@ export class PayrollBulkUploadService {
             logger.error(`Error finding department:`, deptError);
           }
 
-          // Buscar empleado por nombre (employeeName) para obtener el employeeId
+          // Buscar empleado por nombre/cédula — primero en Art42, luego en Maestro General
           try {
             const EmployeeRepository = (await import('@repositories/EmployeeRepository')).default;
-            
-            // Buscar empleado por nombre (case-insensitive)
+            const db = (await import('@config/database')).getDatabase();
+
+            // 1) Buscar en Art42 por nombre
             const employees = await EmployeeRepository.getAll();
-            const employee = employees.find((emp: any) => 
+            let employee: any = employees.find((emp: any) =>
               emp.firstName && emp.lastName &&
               `${emp.lastName} ${emp.firstName}`.toUpperCase() === payrollData.employeeName.toUpperCase()
             );
-            
-            logger.info(`Looking for employee with name: ${payrollData.employeeName}, found: ${employee ? 'YES' : 'NO'}`);
-            
+
+            // 2) Buscar en Art42 por cédula
+            if (!employee && payrollData.cedula) {
+              employee = employees.find((emp: any) => emp.cedula === payrollData.cedula);
+            }
+
+            let maestroRow: any = null;
+
+            // 3) Si no está en Art42, buscar en maestro_general por nombre
             if (!employee) {
+              maestroRow = await db.get(
+                `SELECT id, cedula, centroDeCostoId FROM maestro_general
+                 WHERE UPPER(apellidos || ' ' || COALESCE(nombres,'')) = UPPER(?)`,
+                [payrollData.employeeName]
+              );
+            }
+
+            // 4) Si tampoco encontró por nombre en maestro, buscar por cédula
+            if (!employee && !maestroRow && payrollData.cedula) {
+              maestroRow = await db.get(
+                `SELECT id, cedula, centroDeCostoId FROM maestro_general WHERE cedula = ?`,
+                [payrollData.cedula]
+              );
+            }
+
+            const foundInMaestro = !employee && !!maestroRow;
+            const resolvedId = employee ? employee.id : maestroRow?.id;
+
+            logger.info(`Looking for employee "${payrollData.employeeName}" (${payrollData.cedula}): Art42=${employee ? 'YES' : 'NO'}, Maestro=${maestroRow ? 'YES' : 'NO'}`);
+
+            if (!resolvedId) {
               notFoundEmployees.push({
                 row: rowIndex + 1,
                 cedula: payrollData.cedula,
                 name: payrollData.employeeName,
               });
-              // Guardar la nómina como pendiente para procesarla después de crear el empleado
               pendingPayrolls.push(payrollData);
-              logger.info(`Payroll for employee ${payrollData.employeeName} saved as pending - will be processed after employee registration`);
+              logger.info(`Payroll for employee ${payrollData.employeeName} saved as pending`);
               continue;
             }
-            
-            // Asignar el employeeId del empleado encontrado
-            payrollData.employeeId = employee.id;
-            // Si no se encontró el departamento, usar el del empleado
+
+            // Asignar employeeId
+            payrollData.employeeId = resolvedId;
+
+            // Si no se resolvió el departamento, usar el del registro encontrado
             if (!payrollData.departmentId || payrollData.departmentId.length < 20) {
-              payrollData.departmentId = employee.departmentId;
-              logger.info(`Using employee's department: ${employee.departmentId}`);
+              if (foundInMaestro) {
+                payrollData.departmentId = maestroRow.centroDeCostoId ?? '';
+              } else {
+                payrollData.departmentId = employee.departmentId;
+              }
+              logger.info(`Using department from ${foundInMaestro ? 'maestro' : 'Art42'}: ${payrollData.departmentId}`);
             }
-            logger.info(`Assigned employeeId: ${employee.id} for name: ${payrollData.employeeName}`);
+
+            logger.info(`Assigned employeeId: ${resolvedId} (source: ${foundInMaestro ? 'maestro_general' : 'Art42'})`);
           } catch (employeeError) {
             logger.error(`Error finding employee by name ${payrollData.employeeName}:`, employeeError);
             errors.push({
@@ -395,7 +428,6 @@ export class PayrollBulkUploadService {
 
           try {
             const db = (await import('@config/database')).getDatabase();
-            
             if (existingPayroll) {
               // Si existe un registro previo, consolidar sumando los valores
               logger.info(`Found existing payroll for ${payrollData.employeeName} - ${payrollData.year}/${payrollData.month}, consolidating...`);

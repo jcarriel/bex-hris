@@ -141,13 +141,13 @@ async getActiveEmployeesCount(): Promise<number> {
   ): Promise<Employee | null> {
     try {
       const employee = await EmployeeRepository.update(id, {
-        status: 'terminated',
+        status: 'inactive',
         terminationDate,
         terminationReason: reason,
       });
 
       if (employee) {
-        logger.info(`Employee terminated: ${id}`);
+        logger.info(`Employee status updated: ${id}`);
 
         // Send notification
         await NotificationService.sendViaMultipleChannels(['app', 'email'], {
@@ -156,7 +156,7 @@ async getActiveEmployeesCount(): Promise<number> {
           title: 'Notificación de Salida',
           message: `Tu relación laboral ha terminado efectiva el ${terminationDate}. Motivo: ${reason}`,
           data: {
-            type: 'employee_terminated',
+            type: 'employee_status_updated',
             employeeId: id,
             terminationDate,
           },

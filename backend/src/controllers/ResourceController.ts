@@ -8,16 +8,15 @@ import PositionService from '@services/PositionService';
 import PayrollService from '@services/PayrollService';
 import AttendanceService from '@services/AttendanceService';
 import LeaveService from '@services/LeaveService';
-import DocumentCategoryService from '@services/DocumentCategoryService';
 import { TaskService } from '@services/TaskService';
 import NotificationScheduleService from '@services/NotificationScheduleService';
 import SchedulerService from '@services/SchedulerService';
-import DocumentGeneratorService from '../services/DocumentGeneratorService';
 import DepartmentScheduleService from '@services/DepartmentScheduleService';
 import NotificationRepository from '@repositories/NotificationRepository';
 import UserRepository from '@repositories/UserRepository';
 import logger from '@utils/logger';
 import { getDatabase } from '@config/database';
+import { logAudit } from '@utils/audit';
 
 export class ResourceController {
   // ===== DEPARTMENTS =====
@@ -64,6 +63,12 @@ export class ResourceController {
   async deleteDepartment(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      const db = getDatabase();
+      const count = await db.get(`SELECT COUNT(*) as c FROM employees WHERE departmentId = ? AND status != 'inactive'`, [id]) as any;
+      if (count && count.c > 0) {
+        res.status(409).json({ success: false, message: `No se puede eliminar: hay ${count.c} empleado(s) asignado(s) a este centro de costo` });
+        return;
+      }
       const result = await DepartmentService.deleteDepartment(id);
       if (!result) {
         res.status(404).json({ success: false, message: 'Department not found' });
@@ -127,6 +132,12 @@ export class ResourceController {
   async deletePosition(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      const db = getDatabase();
+      const count = await db.get(`SELECT COUNT(*) as c FROM employees WHERE positionId = ? AND status != 'inactive'`, [id]) as any;
+      if (count && count.c > 0) {
+        res.status(409).json({ success: false, message: `No se puede eliminar: hay ${count.c} empleado(s) con este cargo asignado` });
+        return;
+      }
       const result = await PositionService.deletePosition(id);
       if (!result) {
         res.status(404).json({ success: false, message: 'Position not found' });
@@ -214,6 +225,7 @@ export class ResourceController {
   async createPayroll(req: AuthRequest, res: Response): Promise<void> {
     try {
       const payroll = await PayrollService.createPayroll(req.body);
+      logAudit(req.userId, 'CREATE', 'payroll', payroll.id || payroll.employeeId || 'batch');
       res.status(201).json({ success: true, data: payroll });
     } catch (error) {
       logger.error('Create payroll error', error);
@@ -315,7 +327,7 @@ export class ResourceController {
   // ===== LEAVES =====
   async createLeave(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const data = { ...req.body, status: req.body.status || 'pending' };
+      const data = { ...req.body, status: req.body.status || 'pending', submittedBy: req.userId || null };
 
       // Check for overlapping leaves of the same type
       if (data.employeeId && data.startDate && data.endDate && data.type) {
@@ -333,6 +345,7 @@ export class ResourceController {
       }
 
       const leave = await LeaveService.createLeave(data);
+      logAudit(req.userId, 'CREATE', 'leave', leave.id);
       res.status(201).json({ success: true, data: leave });
     } catch (error) {
       logger.error('Create leave error', error);
@@ -413,6 +426,18 @@ export class ResourceController {
 
   async approveLeave(req: AuthRequest, res: Response): Promise<void> {
     try {
+      // Permission check: admin always allowed; others need 'bienestar:aprobar' in their role
+      if (req.userRole !== 'admin') {
+        const db = getDatabase();
+        const role = req.userRoleId
+          ? await db.get<{ permissions: string }>('SELECT permissions FROM roles WHERE id = ?', [req.userRoleId])
+          : null;
+        const perms: string[] = role ? JSON.parse(role.permissions || '[]') : [];
+        if (!perms.includes('*') && !perms.includes('bienestar:aprobar')) {
+          res.status(403).json({ success: false, message: 'No tienes permiso para aprobar solicitudes' });
+          return;
+        }
+      }
       const { id } = req.params;
       const leave = await LeaveService.approveLeave(id, req.userId || '');
       if (!leave) {
@@ -422,7 +447,7 @@ export class ResourceController {
       // Notify all admin users
       try {
         const users = await UserRepository.getAll() as any[];
-        const label: Record<string, string> = { vacation: 'Vacaciones', medical: 'Permiso médico', maternity: 'Maternidad', personal: 'Permiso personal', unpaid: 'Permiso sin pago' };
+        const label: Record<string, string> = { vacation: 'Vacaciones', medical: 'Permiso médico', maternity: 'Maternidad', personal: 'Permiso personal' };
         for (const u of users.filter(u => u.status !== 'inactive')) {
           await NotificationRepository.create({
             userId: u.id,
@@ -432,6 +457,7 @@ export class ResourceController {
           });
         }
       } catch (e) { logger.warn('Could not send leave approval notifications', e); }
+      logAudit(req.userId, 'APPROVE', 'leave', id);
       res.status(200).json({ success: true, data: leave });
     } catch (error) {
       logger.error('Approve leave error', error);
@@ -441,13 +467,25 @@ export class ResourceController {
 
   async rejectLeave(req: AuthRequest, res: Response): Promise<void> {
     try {
+      // Permission check: admin always allowed; others need 'bienestar:aprobar' in their role
+      if (req.userRole !== 'admin') {
+        const db = getDatabase();
+        const role = req.userRoleId
+          ? await db.get<{ permissions: string }>('SELECT permissions FROM roles WHERE id = ?', [req.userRoleId])
+          : null;
+        const perms: string[] = role ? JSON.parse(role.permissions || '[]') : [];
+        if (!perms.includes('*') && !perms.includes('bienestar:aprobar')) {
+          res.status(403).json({ success: false, message: 'No tienes permiso para rechazar solicitudes' });
+          return;
+        }
+      }
       const { id } = req.params;
-      const leave = await LeaveService.rejectLeave(id);
+      const leave = await LeaveService.rejectLeave(id, req.userId || undefined);
       if (!leave) { res.status(404).json({ success: false, message: 'Leave not found' }); return; }
       // Notify all admin users
       try {
         const users = await UserRepository.getAll() as any[];
-        const label: Record<string, string> = { vacation: 'Vacaciones', medical: 'Permiso médico', maternity: 'Maternidad', personal: 'Permiso personal', unpaid: 'Permiso sin pago' };
+        const label: Record<string, string> = { vacation: 'Vacaciones', medical: 'Permiso médico', maternity: 'Maternidad', personal: 'Permiso personal' };
         for (const u of users.filter(u => u.status !== 'inactive')) {
           await NotificationRepository.create({
             userId: u.id,
@@ -457,6 +495,7 @@ export class ResourceController {
           });
         }
       } catch (e) { logger.warn('Could not send leave rejection notifications', e); }
+      logAudit(req.userId, 'REJECT', 'leave', id);
       res.status(200).json({ success: true, data: leave });
     } catch (error) {
       logger.error('Reject leave error', error);
@@ -1013,122 +1052,196 @@ export class ResourceController {
     }
   }
 
-  // ===== DOCUMENT GENERATOR =====
-  async createDocumentTemplate(req: AuthRequest, res: Response): Promise<void> {
+  // ===== MAESTRO GENERAL =====
+  private async resolveMaestroDept(name: string): Promise<string | null> {
+    if (!name || !name.trim()) return null
+    const trimmed = name.trim().toUpperCase()
+    const departments = await DepartmentService.getAllDepartments()
+    let dept = (departments as any[]).find((d: any) => d.name.toUpperCase() === trimmed)
+    if (!dept) dept = await DepartmentService.createDepartment(trimmed, '')
+    return dept.id
+  }
+
+  private async resolveMaestroLabor(name: string): Promise<string | null> {
+    if (!name || !name.trim()) return null
+    const { v4: uuidv4 } = await import('uuid')
+    const trimmed = name.trim().toUpperCase()
+    const db = getDatabase()
+    const LaborService = (await import('@services/LaborService')).default
+    const labors = await LaborService.getLabors()
+    let labor = (labors as any[]).find((l: any) => l.name.toUpperCase() === trimmed)
+    if (!labor) {
+      // Insertar labor directamente sin cargo (positionId nullable para Maestro General)
+      const id = uuidv4()
+      const now = new Date().toISOString()
+      await db.run(
+        'INSERT INTO labores (id, name, description, positionId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)',
+        [id, trimmed, null, null, now, now]
+      )
+      labor = { id }
+    }
+    return labor.id
+  }
+
+  private async resolveTipoTrabajador(value: string): Promise<string | null> {
+    if (!value || !value.trim()) return null
+    const { v4: uuidv4 } = await import('uuid')
+    const trimmed = value.trim().toUpperCase()
+    const db = getDatabase()
+    const existing = await db.get(
+      "SELECT id FROM catalogs WHERE type = 'tipo_trabajador' AND UPPER(value) = ?", [trimmed]
+    ) as any
+    if (existing) return existing.id
+    const id = uuidv4()
+    const now = new Date().toISOString()
+    await db.run('INSERT INTO catalogs (id, type, value, createdAt, updatedAt) VALUES (?,?,?,?,?)',
+      [id, 'tipo_trabajador', trimmed, now, now])
+    return id
+  }
+
+  private async getMaestroRow(db: any, id: string): Promise<any> {
+    return db.get(`
+      SELECT mg.*,
+             ct.value AS tipoTrabajador,
+             cc.name  AS centroDeCosto,
+             l.name   AS labor
+      FROM   maestro_general mg
+      LEFT JOIN catalogs    ct ON mg.tipoTrabajadorId = ct.id
+      LEFT JOIN centros_costo cc ON mg.centroDeCostoId = cc.id
+      LEFT JOIN labores        l ON mg.laborId         = l.id
+      WHERE  mg.id = ?`, [id])
+  }
+
+  async getMaestroGeneral(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { name, type, content, variables } = req.body;
-      if (!name || !type || !content) {
-        res.status(400).json({ success: false, message: 'Name, type, and content are required' });
-        return;
+      const db = getDatabase()
+      const { search, estado, centroDeCosto, labor, tipoTrabajador } = req.query as Record<string, string>
+
+      let sql = `
+        SELECT mg.*,
+               ct.value AS tipoTrabajador,
+               cc.name  AS centroDeCosto,
+               l.name   AS labor
+        FROM   maestro_general mg
+        LEFT JOIN catalogs      ct ON mg.tipoTrabajadorId = ct.id
+        LEFT JOIN centros_costo cc ON mg.centroDeCostoId  = cc.id
+        LEFT JOIN labores        l ON mg.laborId          = l.id
+        WHERE  1=1`
+      const params: unknown[] = []
+
+      if (search) {
+        sql += ' AND (mg.apellidos LIKE ? OR mg.nombres LIKE ? OR mg.cedula LIKE ?)'
+        const q = `%${search}%`
+        params.push(q, q, q)
       }
-      const template = await DocumentGeneratorService.createTemplate({ name, type, content, variables });
-      res.status(201).json({ success: true, data: template });
+      if (estado)         { sql += ' AND mg.estado = ?';            params.push(estado.toUpperCase()) }
+      if (centroDeCosto)  { sql += ' AND cc.name LIKE ?';           params.push(`%${centroDeCosto}%`) }
+      if (labor)          { sql += ' AND l.name LIKE ?';            params.push(`%${labor}%`) }
+      if (tipoTrabajador) { sql += ' AND ct.value = ?';             params.push(tipoTrabajador.toUpperCase()) }
+
+      sql += ' ORDER BY mg.apellidos ASC'
+
+      const rows = await db.all(sql, params)
+      res.json({ success: true, data: rows })
     } catch (error) {
-      logger.error('Create document template error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+      logger.error('Error fetching maestro general', error)
+      res.status(500).json({ success: false, message: 'Error al obtener maestro general' })
     }
   }
 
-  async uploadDocumentTemplate(req: AuthRequest, res: Response): Promise<void> {
+  async createMaestro(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { name, type, variables } = req.body;
-      const file = (req as any).file;
-
-      if (!name || !type || !file) {
-        res.status(400).json({ success: false, message: 'Name, type, and file are required' });
-        return;
+      const db = getDatabase()
+      const { tipoTrabajador, fechaIngreso, semanaIngreso, apellidos, nombres, cedula,
+              centroDeCosto, labor, fechaNacimiento, tituloBachiller,
+              semanaSalida, fechaSalida, estado } = req.body
+      if (!cedula || !apellidos) {
+        res.status(400).json({ success: false, message: 'Cédula y apellidos son requeridos' })
+        return
+      }
+      const dup = await db.get('SELECT id FROM maestro_general WHERE cedula = ?', [cedula]) as any
+      if (dup) {
+        res.status(409).json({ success: false, message: 'Ya existe un registro con esa cédula' })
+        return
       }
 
-      const variablesArray = typeof variables === 'string' ? JSON.parse(variables) : variables || [];
-      const template = await DocumentGeneratorService.createTemplateFromFile(
-        name,
-        type,
-        file.buffer,
-        file.originalname,
-        variablesArray
-      );
-      res.status(201).json({ success: true, data: template });
+      const tipoTrabajadorId = await this.resolveTipoTrabajador(tipoTrabajador)
+      const centroDeCostoId  = await this.resolveMaestroDept(centroDeCosto)
+      const laborId          = await this.resolveMaestroLabor(labor)
+
+      const { v4: uuidv4 } = await import('uuid')
+      const id = uuidv4()
+      const now = new Date().toISOString()
+      await db.run(
+        `INSERT INTO maestro_general
+          (id, tipoTrabajadorId, fechaIngreso, semanaIngreso, apellidos, nombres, cedula,
+           centroDeCostoId, laborId, fechaNacimiento, tituloBachiller, semanaSalida, fechaSalida, estado, createdAt, updatedAt)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, tipoTrabajadorId, fechaIngreso ?? null, semanaIngreso ?? null,
+         apellidos, nombres ?? null, cedula, centroDeCostoId, laborId,
+         fechaNacimiento ?? null, tituloBachiller ?? null, semanaSalida ?? null,
+         fechaSalida ?? null, estado ?? 'ACTIVO', now, now]
+      )
+      const row = await this.getMaestroRow(db, id)
+      res.status(201).json({ success: true, data: row })
     } catch (error) {
-      logger.error('Upload document template error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+      logger.error('Create maestro error', error)
+      res.status(500).json({ success: false, message: 'Error al crear registro' })
     }
   }
 
-  async getDocumentTemplates(req: AuthRequest, res: Response): Promise<void> {
+  async updateMaestro(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const templates = await DocumentGeneratorService.getAllTemplates();
-      res.status(200).json({ success: true, data: templates });
-    } catch (error) {
-      logger.error('Get document templates error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async updateDocumentTemplate(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const template = await DocumentGeneratorService.updateTemplate(id, req.body);
-      if (!template) {
-        res.status(404).json({ success: false, message: 'Template not found' });
-        return;
+      const db = getDatabase()
+      const { id } = req.params
+      const { tipoTrabajador, fechaIngreso, semanaIngreso, apellidos, nombres, cedula,
+              centroDeCosto, labor, fechaNacimiento, tituloBachiller,
+              semanaSalida, fechaSalida, estado } = req.body
+      const existing = await db.get('SELECT id FROM maestro_general WHERE id = ?', [id]) as any
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'Registro no encontrado' })
+        return
       }
-      res.status(200).json({ success: true, data: template });
+
+      const tipoTrabajadorId = await this.resolveTipoTrabajador(tipoTrabajador)
+      const centroDeCostoId  = await this.resolveMaestroDept(centroDeCosto)
+      const laborId          = await this.resolveMaestroLabor(labor)
+
+      const now = new Date().toISOString()
+      await db.run(
+        `UPDATE maestro_general SET
+           tipoTrabajadorId=?, fechaIngreso=?, semanaIngreso=?, apellidos=?, nombres=?, cedula=?,
+           centroDeCostoId=?, laborId=?, fechaNacimiento=?, tituloBachiller=?,
+           semanaSalida=?, fechaSalida=?, estado=?, updatedAt=?
+         WHERE id=?`,
+        [tipoTrabajadorId, fechaIngreso ?? null, semanaIngreso ?? null,
+         apellidos ?? null, nombres ?? null, cedula ?? null,
+         centroDeCostoId, laborId,
+         fechaNacimiento ?? null, tituloBachiller ?? null,
+         semanaSalida ?? null, fechaSalida ?? null, estado ?? 'ACTIVO', now, id]
+      )
+      const row = await this.getMaestroRow(db, id)
+      res.status(200).json({ success: true, data: row })
     } catch (error) {
-      logger.error('Update document template error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+      logger.error('Update maestro error', error)
+      res.status(500).json({ success: false, message: 'Error al actualizar registro' })
     }
   }
 
-  async deleteDocumentTemplate(req: AuthRequest, res: Response): Promise<void> {
+  async deleteMaestro(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      await DocumentGeneratorService.deleteTemplate(id);
-      res.status(200).json({ success: true, message: 'Template deleted' });
-    } catch (error) {
-      logger.error('Delete document template error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async generateDocument(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { templateId, data } = req.body;
-      if (!templateId || !data) {
-        res.status(400).json({ success: false, message: 'Template ID and data are required' });
-        return;
+      const db = getDatabase()
+      const { id } = req.params
+      const existing = await db.get('SELECT id FROM maestro_general WHERE id = ?', [id]) as any
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'Registro no encontrado' })
+        return
       }
-      const document = await DocumentGeneratorService.generateDocument(templateId, data);
-      res.status(201).json({ success: true, data: document });
+      await db.run('DELETE FROM maestro_general WHERE id = ?', [id])
+      res.status(200).json({ success: true, message: 'Registro eliminado' })
     } catch (error) {
-      logger.error('Generate document error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async getGeneratedDocuments(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const documents = await DocumentGeneratorService.getAllGeneratedDocuments();
-      res.status(200).json({ success: true, data: documents });
-    } catch (error) {
-      logger.error('Get generated documents error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
-    }
-  }
-
-  async downloadGeneratedDocument(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const document = await DocumentGeneratorService.getGeneratedDocument(id);
-      if (!document) {
-        res.status(404).json({ success: false, message: 'Document not found' });
-        return;
-      }
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=documento-${id}.pdf`);
-      res.send(document.generatedContent);
-    } catch (error) {
-      logger.error('Download generated document error', error);
-      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+      logger.error('Delete maestro error', error)
+      res.status(500).json({ success: false, message: 'Error al eliminar registro' })
     }
   }
 
@@ -1178,6 +1291,13 @@ export class ResourceController {
           file.originalname
         );
         res.status(200).json({ success: true, data: result });
+      } else if (type === 'maestro') {
+        // Procesar archivo de Maestro General
+        const result = await (await import('@services/MaestroGeneralBulkUploadService')).default.processMaestroFile(
+          file.buffer,
+          file.originalname
+        );
+        res.status(200).json({ success: true, data: result });
       } else {
         res.status(400).json({ success: false, message: 'Invalid type' });
       }
@@ -1192,26 +1312,18 @@ export class ResourceController {
       const { getDatabase } = await import('@config/database');
       const db = getDatabase();
       
-      // Deshabilitar restricciones de clave foránea temporalmente
-      await db.exec('PRAGMA foreign_keys = OFF');
-      
-      try {
-        // Eliminar datos de tablas dependientes primero
-        await db.exec('DELETE FROM documents');
-        await db.exec('DELETE FROM attendance');
-        await db.exec('DELETE FROM leaves');
-        await db.exec('DELETE FROM payroll');
-        await db.exec('DELETE FROM tasks WHERE assignedTo IS NOT NULL');
-        
-        // Finalmente eliminar empleados
-        await db.exec('DELETE FROM employees');
-        
-        logger.info('Employees table and related data cleared');
-        res.status(200).json({ success: true, message: 'Employees table cleared successfully' });
-      } finally {
-        // Reabilitar restricciones de clave foránea
-        await db.exec('PRAGMA foreign_keys = ON');
-      }
+      // Eliminar datos de tablas dependientes primero (orden correcto para FK)
+      await db.exec('DELETE FROM documents');
+      await db.exec('DELETE FROM attendance');
+      await db.exec('DELETE FROM leaves');
+      await db.exec('DELETE FROM payroll');
+      await db.exec('DELETE FROM tasks WHERE assignedTo IS NOT NULL');
+
+      // Finalmente eliminar empleados
+      await db.exec('DELETE FROM employees');
+
+      logger.info('Employees table and related data cleared');
+      res.status(200).json({ success: true, message: 'Employees table cleared successfully' });
     } catch (error) {
       logger.error('Clear employees error', error);
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
@@ -1253,6 +1365,7 @@ export class ResourceController {
         res.status(404).json({ success: false, message: 'Payroll not found' });
         return;
       }
+      logAudit(req.userId, 'DELETE', 'payroll', id);
       res.status(200).json({ success: true, message: 'Payroll deleted successfully' });
     } catch (error) {
       logger.error('Delete payroll error', error);

@@ -38,7 +38,10 @@ class EventService {
 
   private daysUntil(dateStr: string): number {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const target = new Date(dateStr); target.setHours(0, 0, 0, 0);
+    // Parse as LOCAL date (not UTC) — "YYYY-MM-DD" parsed via new Date() assumes UTC midnight,
+    // which shifts the date in negative-offset timezones (e.g. UTC-5 → day-1)
+    const [y, m, d] = dateStr.split('T')[0].split('-').map(Number)
+    const target = new Date(y, m - 1, d)
     return Math.round((target.getTime() - today.getTime()) / 86400000);
   }
 
@@ -50,8 +53,8 @@ class EventService {
     const mm = parts[1]; // 1-12
     const dd = parts[2];
     const thisYear = today.getFullYear();
-    let candidate = new Date(thisYear, mm - 1, dd - 1); // 1 day before anniversary
-    if (candidate < today) candidate = new Date(thisYear + 1, mm - 1, dd - 1);
+    let candidate = new Date(thisYear, mm - 1, dd);
+    if (candidate < today) candidate = new Date(thisYear + 1, mm - 1, dd);
     // Return as YYYY-MM-DD using local date parts
     const y = candidate.getFullYear();
     const mo = String(candidate.getMonth() + 1).padStart(2, '0');
@@ -81,7 +84,7 @@ class EventService {
           id: `bd-${emp.id}`,
           type: 'birthday',
           title: `Cumpleaños — ${name}`,
-          description: `${name} cumple años el ${new Date(nextBd).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`,
+          description: `${name} cumple años el ${(() => { const [y,m,d] = nextBd.split('-').map(Number); return new Date(y, m-1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }) })()}`,
           eventDate: nextBd,
           employeeId: emp.id,
           employeeName: name,
@@ -114,7 +117,7 @@ class EventService {
           id: `ce-${emp.id}`,
           type: 'contract_expiry' as const,
           title: `Contrato por vencer — ${name}`,
-          description: `El contrato de ${name} vence el ${new Date(nextExpiry + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+          description: `El contrato de ${name} vence el ${(() => { const [y,m,d] = nextExpiry.split('-').map(Number); return new Date(y, m-1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) })()}`,
           eventDate: nextExpiry,
           employeeId: emp.id,
           employeeName: name,
