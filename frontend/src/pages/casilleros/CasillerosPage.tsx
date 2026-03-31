@@ -1026,7 +1026,7 @@ export function CasillerosPage() {
                           disabled={items.length === 0}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold text-[var(--text-2)] hover:bg-red-500/10 hover:text-red-400 hover:border-red-400/30 disabled:opacity-30 transition-all"
                           style={{ borderColor: 'var(--border)' }}
-                          title={`Quitar último (${items.at(-1)?.section}-${items.at(-1)?.number.padStart(2,'0') ?? ''})`}
+                          title={`Quitar último (${items[items.length - 1]?.section}-${items[items.length - 1]?.number.padStart(2,'0') ?? ''})`}
                         >
                           <X size={11} /> Quitar
                         </button>

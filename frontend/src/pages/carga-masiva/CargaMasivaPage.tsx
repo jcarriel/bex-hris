@@ -319,7 +319,7 @@ function UploadTab({ tabKey }: { tabKey: TemplateName }) {
       const extra: Record<string, string> = tabKey === 'employees' ? { status } : {}
       const res = await bulkUploadService.upload(tabKey, file, extra)
       setResult(res)
-      if (res.success > 0) {
+      if (res.createdCount > 0 || res.updatedCount > 0) {
         qc.invalidateQueries({ queryKey: ['empleados'] })
         qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
       }

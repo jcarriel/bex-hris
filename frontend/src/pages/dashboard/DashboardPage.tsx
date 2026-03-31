@@ -238,7 +238,7 @@ export function DashboardPage() {
   const donutData = [
     { name: 'Activos',   value: s.statusBreakdown.active,     color: '#48bb78' },
     { name: 'Inactivos', value: s.statusBreakdown.inactive,   color: '#94a3b8' },
-    { name: 'Licencia',  value: s.statusBreakdown.on_leave,   color: '#f59e0b' },
+    { name: 'Licencia',  value: (s.statusBreakdown as any).on_leave ?? 0,   color: '#f59e0b' },
   ].filter((d) => d.value > 0)
 
   const firstName = user?.nombre?.split(' ')[0] ?? 'Usuario'
