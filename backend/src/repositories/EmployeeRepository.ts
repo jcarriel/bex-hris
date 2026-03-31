@@ -137,11 +137,11 @@ export class EmployeeRepository {
     const normalizedCedula = cedula.trim().replace(/\D/g, '');
     
     // Buscar con búsqueda flexible ignorando ceros al inicio
-    const result = db.get(
-      'SELECT * FROM employees WHERE REPLACE(cedula, "0", "") = REPLACE(?, "0", "")',
+    const result = await db.get(
+      "SELECT * FROM employees WHERE REPLACE(cedula, '0', '') = REPLACE(?, '0', '')",
       [normalizedCedula]
     );
-    
+
     return result || null;
   }
 
