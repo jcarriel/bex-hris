@@ -22,7 +22,7 @@ import { toast } from 'sonner'
 import { empleadosService } from '@/services/empleados.service'
 import { departmentsService } from '@/services/departments.service'
 import { positionsService } from '@/services/positions.service'
-import { laborsService } from '@/services/labors.service'
+import { laborsService, type Labor } from '@/services/labors.service'
 import { maestroGeneralService, type MaestroGeneral, type MaestroGeneralFormData } from '@/services/maestro-general.service'
 import { catalogService } from '@/services/catalog.service'
 import { EmpleadoForm } from '@/components/empleados/EmpleadoForm'
@@ -32,7 +32,7 @@ import { Avatar } from '@/components/shared/Avatar'
 import { Badge } from '@/components/shared/Badge'
 import type { Empleado, EmpleadoFormData } from '@/types/empleado.types'
 import { cn, formatCurrency } from '@/lib/utils'
-import { DayPicker } from 'react-day-picker'
+import { DayPicker, type DateRange } from 'react-day-picker'
 import { es } from 'react-day-picker/locale'
 import 'react-day-picker/style.css'
 
@@ -436,7 +436,6 @@ function MaestroSheet({
 type ColFilter = 'text' | 'select' | 'date' | null
 
 // ─── Date range filter popup ──────────────────────────────────────────────────
-type DateRange = { from?: Date; to?: Date }
 
 function DateRangeFilter({
   fromKey, toKey, colFilters, setFilter,
@@ -989,9 +988,9 @@ export function EmpleadosPage() {
     queryFn: () => positionsService.getAll(),
   })
 
-  const { data: labors = [] } = useQuery({
+  const { data: labors = [] } = useQuery<Labor[]>({
     queryKey: ['labors'],
-    queryFn: laborsService.getAll,
+    queryFn: () => laborsService.getAll(),
   })
 
   // All employees (scoped or normal) — no pagination yet
@@ -1481,14 +1480,14 @@ export function EmpleadosPage() {
             </span>
             <div className="flex gap-1">
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
                 className="p-1.5 rounded-md border border-[var(--border-color)] text-[var(--text-2)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ChevronLeft size={15} />
               </button>
               <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page === totalPages}
                 className="p-1.5 rounded-md border border-[var(--border-color)] text-[var(--text-2)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
