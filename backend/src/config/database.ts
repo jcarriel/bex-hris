@@ -46,37 +46,40 @@ let db: DbAdapter | null = null;
 export async function initializeDatabase(): Promise<DbAdapter> {
   if (db) return db;
 
-  // Try to build connection string from Railway public proxy variables
-  let connectionString: string | null = null;
-  
-  if (process.env.RAILWAY_TCP_PROXY_DOMAIN && process.env.RAILWAY_TCP_PROXY_PORT && process.env.PGUSER && process.env.PGPASSWORD) {
-    connectionString = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.RAILWAY_TCP_PROXY_DOMAIN}:${process.env.RAILWAY_TCP_PROXY_PORT}/${process.env.PGDATABASE || 'railway'}`;
-  }
-  
-  console.log('Database config:', {
-    hasRailwayProxy: !!process.env.RAILWAY_TCP_PROXY_DOMAIN,
-    railwayDomain: process.env.RAILWAY_TCP_PROXY_DOMAIN,
-    railwayPort: process.env.RAILWAY_TCP_PROXY_PORT,
-    pguser: process.env.PGUSER,
-    pgdatabase: process.env.PGDATABASE,
-  });
+  let cfg: PoolConfig;
 
-  const cfg: PoolConfig = connectionString
-    ? {
-        connectionString,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-        max: 10,
-        idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 5_000,
-      }
-    : {
-        host:     process.env.DB_HOST     || 'localhost',
-        port:     Number(process.env.DB_PORT) || 5432,
-        database: process.env.DB_NAME     || 'hris',
-        user:     process.env.DB_USER     || 'postgres',
-        password: process.env.DB_PASSWORD || '',
-        max: 10,
-      };
+  // 1. DATABASE_URL explícita (en Railway: agrega DATABASE_URL=${{Postgres.DATABASE_PUBLIC_URL}})
+  const dbUrl = process.env.DATABASE_URL;
+  if (dbUrl && !dbUrl.includes('railway.internal') && !dbUrl.includes('${{')) {
+    console.log('Database: usando DATABASE_URL');
+    cfg = {
+      connectionString: dbUrl,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    };
+  }
+  // 2. Railway TCP proxy (RAILWAY_TCP_PROXY_DOMAIN + RAILWAY_TCP_PROXY_PORT del servicio Postgres)
+  else if (process.env.RAILWAY_TCP_PROXY_DOMAIN && process.env.RAILWAY_TCP_PROXY_PORT && process.env.PGPASSWORD) {
+    console.log('Database: usando Railway TCP proxy');
+    cfg = {
+      connectionString: `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.RAILWAY_TCP_PROXY_DOMAIN}:${process.env.RAILWAY_TCP_PROXY_PORT}/${process.env.PGDATABASE || 'railway'}`,
+      ssl: { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    };
+  }
+  // 3. Local dev — DB_* vars del .env
+  else {
+    const host = process.env.DB_HOST || 'localhost';
+    const database = process.env.DB_NAME || 'hris';
+    const user = process.env.DB_USER || 'postgres';
+    const password = String(process.env.DB_PASSWORD ?? '');
+    console.log(`Database: local ${user}@${host}/${database}`);
+    cfg = { host, port: Number(process.env.DB_PORT) || 5432, database, user, password, max: 10 };
+  }
 
   const pool = new Pool(cfg);
 
