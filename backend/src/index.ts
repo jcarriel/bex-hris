@@ -42,7 +42,21 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    const allowed = (process.env.CORS_ORIGINS || '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+    // Always allow localhost and vercel/railway previews
+    const isAllowed =
+      allowed.includes(origin) ||
+      /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.railway.app');
+    return callback(isAllowed ? null : new Error('Not allowed by CORS'), isAllowed);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Biometrico-Target', 'X-Biometrico-Token'],
