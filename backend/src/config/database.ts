@@ -46,24 +46,24 @@ let db: DbAdapter | null = null;
 export async function initializeDatabase(): Promise<DbAdapter> {
   if (db) return db;
 
-  // Check if we have valid Railway PG* variables
-  const hasValidPgVars = process.env.PGHOST && process.env.PGUSER && !process.env.PGHOST.includes('{{');
+  // Try to build connection string from Railway public proxy variables
+  let connectionString: string | null = null;
+  
+  if (process.env.RAILWAY_TCP_PROXY_DOMAIN && process.env.RAILWAY_TCP_PROXY_PORT && process.env.PGUSER && process.env.PGPASSWORD) {
+    connectionString = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.RAILWAY_TCP_PROXY_DOMAIN}:${process.env.RAILWAY_TCP_PROXY_PORT}/${process.env.PGDATABASE || 'railway'}`;
+  }
   
   console.log('Database config:', {
-    hasValidPgVars,
-    pghost: process.env.PGHOST,
-    pgport: process.env.PGPORT,
-    pgdatabase: process.env.PGDATABASE,
+    hasRailwayProxy: !!process.env.RAILWAY_TCP_PROXY_DOMAIN,
+    railwayDomain: process.env.RAILWAY_TCP_PROXY_DOMAIN,
+    railwayPort: process.env.RAILWAY_TCP_PROXY_PORT,
     pguser: process.env.PGUSER,
+    pgdatabase: process.env.PGDATABASE,
   });
 
-  const cfg: PoolConfig = hasValidPgVars
+  const cfg: PoolConfig = connectionString
     ? {
-        host:     process.env.PGHOST,
-        port:     Number(process.env.PGPORT) || 5432,
-        database: process.env.PGDATABASE || 'railway',
-        user:     process.env.PGUSER,
-        password: process.env.PGPASSWORD || '',
+        connectionString,
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
         max: 10,
         idleTimeoutMillis: 30_000,
