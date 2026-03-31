@@ -18,6 +18,7 @@ export interface MaestroGeneral {
   semanaSalida: number | null
   fechaSalida: string | null
   estado: string
+  observacion: string | null
   createdAt: string
   updatedAt: string
 }
@@ -45,6 +46,7 @@ export interface MaestroGeneralFormData {
   semanaSalida: number | null
   fechaSalida: string | null
   estado: string
+  observacion?: string | null
 }
 
 export const maestroGeneralService = {

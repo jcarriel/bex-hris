@@ -10,6 +10,93 @@ function toPositional(sql: string): string {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
+// ─── camelCase column name restorer ──────────────────────────────────────────
+// PostgreSQL lowercases unquoted identifiers (firstName → firstname).
+// Build a lookup map so results are transparently remapped back to camelCase.
+const KNOWN_COLUMNS: string[] = [
+  // common
+  'createdAt', 'updatedAt', 'isSystem',
+  // users
+  'roleId', 'lastLoginAt', 'employeeId',
+  // cargos / labores / departmentScheduleConfig
+  'departmentId', 'positionId', 'laborId', 'salaryMin', 'salaryMax',
+  'entryTimeMin', 'entryTimeMax', 'exitTimeMin', 'exitTimeMax',
+  'totalTimeMin', 'totalTimeMax', 'workHours',
+  // employees
+  'firstName', 'lastName', 'dateOfBirth', 'estadoCivil', 'profilePhoto',
+  'managerId', 'mayordomoId', 'hireDate', 'contratoTipo', 'contratoActual',
+  'contratoTipoId', 'contratoActualId', 'contractEndDate',
+  'terminationDate', 'terminationReason', 'baseSalary',
+  'bankAccount', 'bankName', 'accountType', 'nivelAcademico',
+  'afiliacionId', 'estadoCivilId',
+  // joined aliases — employees
+  'departmentName', 'positionName', 'laborName', 'contratoActualResolved',
+  'estadoCivil', 'contratoTipo', 'contratoActual',
+  // joined aliases — maestro_general
+  'tipoTrabajador', 'centroDeCosto',
+  // joined aliases — leaves
+  'submittedByName', 'approvedByName',
+  // joined aliases — lockers / mayordomos
+  'employeePosition',
+  // joined aliases — users
+  'roleName', 'rolePermissions',
+  // payroll
+  'payrollType', 'employeeName', 'paymentMethod', 'accountNumber',
+  'workDays', 'overtimeHours50', 'earnedSalary', 'responsibilityBonus',
+  'productivityBonus', 'foodAllowance', 'overtimeValue50', 'otherIncome',
+  'medicalLeave', 'twelfthSalary', 'fourteenthSalary', 'totalIncome',
+  'reserveFunds', 'totalBenefits', 'iessContribution', 'nonWorkDays',
+  'incomeTax', 'iessLoan', 'companyLoan', 'spouseExtension',
+  'foodDeduction', 'otherDeductions', 'totalDeductions', 'totalToPay',
+  // attendance
+  'checkIn', 'checkOut',
+  // marcacion
+  'dailyAttendance', 'firstCheckIn', 'lastCheckOut', 'totalTime',
+  // leaves
+  'startDate', 'endDate', 'submittedBy', 'approvedBy', 'approvedDate',
+  // social_cases / documents / data_update_requests
+  'resolvedDate', 'resolvedBy', 'createdBy',
+  'documentType', 'fileName', 'filePath', 'fileSize', 'uploadedBy', 'expiryDate',
+  'fieldName', 'oldValue', 'newValue', 'requestedAt', 'approvedAt', 'rejectionReason',
+  // notifications
+  'userId', 'notificationId', 'sentAt',
+  // system_config
+  'companyName', 'companyLogo', 'vacationDaysPerYear',
+  'contractExpiryNotificationDays', 'documentExpiryNotificationDays',
+  // notification_schedules
+  'dayOfWeek', 'dayOfMonth', 'recipientEmail',
+  // tasks / recurring_tasks / task_comments
+  'completionNotes', 'dueDate', 'assignedTo', 'completedAt',
+  'recurringTaskId', 'isRecurringInstance', 'isActive', 'taskId', 'userName',
+  // lockers
+  'assignedDate',
+  // novedades
+  'respondedBy', 'respondedDate',
+  // audit_logs
+  'entityType', 'entityId', 'ipAddress',
+  // events / event_type_configs
+  'eventDate', 'daysNotice',
+  // maestro_general
+  'tipoTrabajadorId', 'fechaIngreso', 'semanaIngreso',
+  'centroDeCostoId', 'fechaNacimiento', 'tituloBachiller', 'semanaSalida', 'fechaSalida',
+  // mayordomos / lockers
+  'mayordomoId',
+];
+
+const COLUMN_MAP: Record<string, string> = {};
+for (const col of KNOWN_COLUMNS) {
+  COLUMN_MAP[col.toLowerCase()] = col;
+}
+
+function restoreCase<T>(row: any): T {
+  if (!row || typeof row !== 'object') return row;
+  const out: any = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[COLUMN_MAP[k] ?? k] = v;
+  }
+  return out as T;
+}
+
 export interface DbAdapter {
   run(sql: string, params?: any[]): Promise<{ changes: number }>;
   get<T = any>(sql: string, params?: any[]): Promise<T | undefined>;
@@ -25,12 +112,12 @@ function wrapPool(pool: Pool): DbAdapter {
       return { changes: res.rowCount ?? 0 };
     },
     async get<T>(sql: string, params: any[] = []) {
-      const res = await pool.query<T>(toPositional(sql), params);
-      return res.rows[0];
+      const res = await pool.query(toPositional(sql), params);
+      return res.rows[0] ? restoreCase<T>(res.rows[0]) : undefined;
     },
     async all<T>(sql: string, params: any[] = []) {
-      const res = await pool.query<T>(toPositional(sql), params);
-      return res.rows;
+      const res = await pool.query(toPositional(sql), params);
+      return res.rows.map((r) => restoreCase<T>(r));
     },
     async exec(sql) {
       await pool.query(sql);
@@ -726,6 +813,7 @@ async function runMigrations(db: DbAdapter): Promise<void> {
       ['maestro_general', 'centroDeCostoId',  'TEXT'],
       ['maestro_general', 'laborId',          'TEXT'],
       ['maestro_general', 'tipoTrabajadorId', 'TEXT'],
+      ['maestro_general', 'observacion',      'TEXT'],
     ];
 
     for (const [table, col, def] of addCols) {
@@ -763,7 +851,7 @@ async function runMigrations(db: DbAdapter): Promise<void> {
         await db.run(
           `INSERT INTO users (id, username, password, email, nombre, role, roleId, status, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [uuidv4(), 'admin', hashed, 'admin@bexhris.com', 'Administrador', 'admin', 'role-admin', 'active', now, now],
+          [uuidv4(), 'admin', hashed, 'jcarrielroca98@gmail.com', 'Administrador', 'admin', 'role-admin', 'active', now, now],
         );
         console.log(`Default admin user created — usuario: admin, contraseña: ${adminPassword}`);
       }

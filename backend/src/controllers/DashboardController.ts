@@ -13,7 +13,7 @@ export default class DashboardController {
       const totalRow = await db.get(
         `SELECT COUNT(*) as c FROM employees`
       ) as any
-      const totalEmployees = totalRow.c
+      const totalEmployees = Number(totalRow.c)
 
       // Employee status breakdown (for donut chart)
       const statusRows = await db.all(
@@ -22,7 +22,7 @@ export default class DashboardController {
       const statusBreakdown = { active: 0, inactive: 0 }
       for (const row of statusRows) {
         if (row.status in statusBreakdown) {
-          (statusBreakdown as any)[row.status] = row.count
+          (statusBreakdown as any)[row.status] = Number(row.count)
         }
       }
 
@@ -32,19 +32,19 @@ export default class DashboardController {
         `SELECT COUNT(*) as c FROM employees WHERE hireDate >= ?`,
         [monthStart]
       ) as any
-      const newThisMonth = newRow.c
+      const newThisMonth = Number(newRow.c)
 
       // Pending leaves
       const pendingRow = await db.get(
         `SELECT COUNT(*) as c FROM leaves WHERE status = 'pending'`
       ) as any
-      const pendingLeaves = pendingRow.c
+      const pendingLeaves = Number(pendingRow.c)
 
       // Pending novedades
       const novedadesRow = await db.get(
         `SELECT COUNT(*) as c FROM novedades WHERE status = 'pending'`
       ) as any
-      const pendingNovedades = novedadesRow?.c ?? 0
+      const pendingNovedades = Number(novedadesRow?.c ?? 0)
 
       // Payroll sum for previous month
       const prevDate = new Date(year, month - 2, 1)

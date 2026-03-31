@@ -547,11 +547,12 @@ function InactivateDialog({
   open: boolean
   row: MaestroGeneral | null
   loading?: boolean
-  onConfirm: (fechaSalida: string | null) => void
+  onConfirm: (fechaSalida: string | null, observacion: string | null) => void
   onCancel: () => void
 }) {
-  const [fecha, setFecha] = useState('')
-  useEffect(() => { if (open) setFecha('') }, [open])
+  const [fecha, setFecha]           = useState('')
+  const [observacion, setObservacion] = useState('')
+  useEffect(() => { if (open) { setFecha(''); setObservacion('') } }, [open])
   if (!open || !row) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -574,13 +575,23 @@ function InactivateDialog({
             className="w-full h-9 px-3 rounded-lg border text-sm bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-1)] focus:border-[var(--accent)] outline-none transition-colors"
           />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-[var(--text-2)] mb-1">Observación <span className="text-[var(--text-3)]">(opcional)</span></label>
+          <textarea
+            value={observacion}
+            onChange={(e) => setObservacion(e.target.value)}
+            rows={3}
+            placeholder="Motivo de salida, notas..."
+            className="w-full px-3 py-2 rounded-lg border text-sm bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-1)] placeholder:text-[var(--text-3)] focus:border-[var(--accent)] outline-none transition-colors resize-none"
+          />
+        </div>
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onCancel} disabled={loading}
             className="px-4 py-2 rounded-lg text-sm border transition-colors"
             style={{ borderColor: 'var(--border-color)', color: 'var(--text-2)' }}>
             Cancelar
           </button>
-          <button onClick={() => onConfirm(fecha || null)} disabled={loading}
+          <button onClick={() => onConfirm(fecha || null, observacion || null)} disabled={loading}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-white hover:opacity-90 transition-opacity disabled:opacity-50">
             {loading ? <><Loader2 size={14} className="animate-spin" /> Procesando...</> : 'Inactivar'}
           </button>
@@ -625,7 +636,7 @@ function MaestroGeneralTab() {
     onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Error al eliminar'),
   })
   const inactivateMutation = useMutation({
-    mutationFn: ({ row, fechaSalida }: { row: MaestroGeneral; fechaSalida: string | null }) =>
+    mutationFn: ({ row, fechaSalida, observacion }: { row: MaestroGeneral; fechaSalida: string | null; observacion: string | null }) =>
       maestroGeneralService.update(row.id, {
         tipoTrabajador: row.tipoTrabajador, fechaIngreso: row.fechaIngreso,
         semanaIngreso: row.semanaIngreso, apellidos: row.apellidos,
@@ -633,7 +644,7 @@ function MaestroGeneralTab() {
         centroDeCosto: row.centroDeCosto, labor: row.labor,
         fechaNacimiento: row.fechaNacimiento, tituloBachiller: row.tituloBachiller,
         semanaSalida: row.semanaSalida, fechaSalida: fechaSalida ?? row.fechaSalida,
-        estado: 'INACTIVO',
+        estado: 'INACTIVO', observacion,
       }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['maestro-general'] }); setInactivateTarget(null); toast.success('Registro inactivado') },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Error al inactivar'),
@@ -725,7 +736,7 @@ function MaestroGeneralTab() {
         open={!!inactivateTarget}
         row={inactivateTarget}
         loading={inactivateMutation.isPending}
-        onConfirm={(fechaSalida) => inactivateTarget && inactivateMutation.mutate({ row: inactivateTarget, fechaSalida })}
+        onConfirm={(fechaSalida, observacion) => inactivateTarget && inactivateMutation.mutate({ row: inactivateTarget, fechaSalida, observacion })}
         onCancel={() => setInactivateTarget(null)}
       />
       <MaestroExportModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} data={filtered} />

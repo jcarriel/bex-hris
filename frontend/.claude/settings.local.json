@@ -72,7 +72,14 @@
       "Bash(pg_isready)",
       "Bash(psql --version)",
       "Bash(docker --version)",
-      "Bash(docker run:*)"
+      "Bash(docker run:*)",
+      "Bash(where psql:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(docker ps:*)",
+      "Bash(docker rm:*)",
+      "Bash(taskkill //PID 6132 //F)",
+      "Bash(kill %1)",
+      "Bash(docker exec:*)"
     ]
   }
 }

@@ -145,6 +145,7 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
   const [cedulaWarning, setCedulaWarning] = useState<string | null>(null)
   const [pendingValues, setPendingValues] = useState<FormValues | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFirstRender = useRef(true)
 
   const checkCedulaDuplicate = useCallback(async (cedula: string, currentId?: string) => {
     if (!cedula || cedula.length < 6) { setCedulaWarning(null); return }
@@ -200,19 +201,18 @@ export function EmpleadoForm({ defaultValues, onSubmit, onCancel, isLoading }: E
     queryFn: () => catalogService.getByType('afiliacion'),
   })
 
-  // Reset positionId when department changes (only when user actively changes it)
+  // Reset positionId/laborId when user actively changes department (skip first render)
   useEffect(() => {
-    if (!defaultValues?.positionId) {
-      setValue('positionId', '')
-      setValue('laborId', '')
-    }
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    setValue('positionId', '')
+    setValue('laborId', '')
   }, [selectedDeptId]) // eslint-disable-line
 
-  // Reset laborId when position changes
+  // Reset laborId when user actively changes position (skip first render)
+  const isFirstPosRender = useRef(true)
   useEffect(() => {
-    if (!defaultValues?.laborId) {
-      setValue('laborId', '')
-    }
+    if (isFirstPosRender.current) { isFirstPosRender.current = false; return }
+    setValue('laborId', '')
   }, [selectedPosId]) // eslint-disable-line
 
   // Re-apply positionId after positions finish loading (they may arrive after mount)

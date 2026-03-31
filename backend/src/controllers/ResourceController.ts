@@ -376,7 +376,7 @@ export class ResourceController {
       // Used vacation days (approved vacation leaves)
       const usedResult = await db.get(
         `SELECT COALESCE(SUM(
-          CAST((julianday(endDate) - julianday(startDate) + 1) AS INTEGER)
+          (endDate::date - startDate::date + 1)
         ), 0) as used
         FROM leaves
         WHERE employeeId = ? AND type = 'vacation' AND status = 'approved'`,
@@ -1154,7 +1154,7 @@ export class ResourceController {
       const db = getDatabase()
       const { tipoTrabajador, fechaIngreso, semanaIngreso, apellidos, nombres, cedula,
               centroDeCosto, labor, fechaNacimiento, tituloBachiller,
-              semanaSalida, fechaSalida, estado } = req.body
+              semanaSalida, fechaSalida, estado, observacion } = req.body
       if (!cedula || !apellidos) {
         res.status(400).json({ success: false, message: 'Cédula y apellidos son requeridos' })
         return
@@ -1175,12 +1175,12 @@ export class ResourceController {
       await db.run(
         `INSERT INTO maestro_general
           (id, tipoTrabajadorId, fechaIngreso, semanaIngreso, apellidos, nombres, cedula,
-           centroDeCostoId, laborId, fechaNacimiento, tituloBachiller, semanaSalida, fechaSalida, estado, createdAt, updatedAt)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           centroDeCostoId, laborId, fechaNacimiento, tituloBachiller, semanaSalida, fechaSalida, estado, observacion, createdAt, updatedAt)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, tipoTrabajadorId, fechaIngreso ?? null, semanaIngreso ?? null,
          apellidos, nombres ?? null, cedula, centroDeCostoId, laborId,
          fechaNacimiento ?? null, tituloBachiller ?? null, semanaSalida ?? null,
-         fechaSalida ?? null, estado ?? 'ACTIVO', now, now]
+         fechaSalida ?? null, estado ?? 'ACTIVO', observacion ?? null, now, now]
       )
       const row = await this.getMaestroRow(db, id)
       res.status(201).json({ success: true, data: row })
@@ -1196,7 +1196,7 @@ export class ResourceController {
       const { id } = req.params
       const { tipoTrabajador, fechaIngreso, semanaIngreso, apellidos, nombres, cedula,
               centroDeCosto, labor, fechaNacimiento, tituloBachiller,
-              semanaSalida, fechaSalida, estado } = req.body
+              semanaSalida, fechaSalida, estado, observacion } = req.body
       const existing = await db.get('SELECT id FROM maestro_general WHERE id = ?', [id]) as any
       if (!existing) {
         res.status(404).json({ success: false, message: 'Registro no encontrado' })
@@ -1212,13 +1212,14 @@ export class ResourceController {
         `UPDATE maestro_general SET
            tipoTrabajadorId=?, fechaIngreso=?, semanaIngreso=?, apellidos=?, nombres=?, cedula=?,
            centroDeCostoId=?, laborId=?, fechaNacimiento=?, tituloBachiller=?,
-           semanaSalida=?, fechaSalida=?, estado=?, updatedAt=?
+           semanaSalida=?, fechaSalida=?, estado=?, observacion=?, updatedAt=?
          WHERE id=?`,
         [tipoTrabajadorId, fechaIngreso ?? null, semanaIngreso ?? null,
          apellidos ?? null, nombres ?? null, cedula ?? null,
          centroDeCostoId, laborId,
          fechaNacimiento ?? null, tituloBachiller ?? null,
-         semanaSalida ?? null, fechaSalida ?? null, estado ?? 'ACTIVO', now, id]
+         semanaSalida ?? null, fechaSalida ?? null, estado ?? 'ACTIVO',
+         observacion ?? null, now, id]
       )
       const row = await this.getMaestroRow(db, id)
       res.status(200).json({ success: true, data: row })

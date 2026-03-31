@@ -224,7 +224,7 @@ export class DailyControlService {
         `;
 
         await NotificationService.sendViaMultipleChannels(['email', 'app'], {
-          to: process.env.ADMIN_EMAIL || 'admin@company.com',
+          to: process.env.ADMIN_EMAIL || 'jcarrielroca98@gmail.com',
           title: '⚠️ Contratos Próximos a Vencer - Reporte Diario',
           message: htmlMessage,
         });
@@ -303,7 +303,7 @@ export class DailyControlService {
         `;
 
         await NotificationService.sendViaMultipleChannels(['email', 'app'], {
-          to: process.env.ADMIN_EMAIL || 'admin@company.com',
+          to: process.env.ADMIN_EMAIL || 'jcarrielroca98@gmail.com',
           title: '📋 Reporte de Faltas y Ausencias - ' + todayStr,
           message: htmlMessage,
         });

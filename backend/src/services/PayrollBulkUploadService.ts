@@ -36,8 +36,6 @@ export class PayrollBulkUploadService {
       let createdCount = 0;
       let updatedCount = 0;
 
-      logger.info(`Processing payroll file: ${fileName}`);
-
       // Leer archivo XLSX
       const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
       
@@ -48,20 +46,11 @@ export class PayrollBulkUploadService {
         sheetName = baseSheet;
       }
       
-      logger.info(`Reading sheet: ${sheetName}`);
       const worksheet = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
       if (rows.length === 0) {
         throw new Error('El archivo está vacío o no tiene datos');
-      }
-
-      logger.info(`Found ${rows.length} rows in payroll file`);
-      
-      // Log de las claves del primer registro para debugging
-      if (rows.length > 0) {
-        const firstRow = rows[0] as any;
-        logger.info(`Column names in file: ${JSON.stringify(Object.keys(firstRow))}`);
       }
 
       // Mapeo de columnas esperadas en orden - con variaciones de nombres
@@ -118,8 +107,6 @@ export class PayrollBulkUploadService {
         const normalizedKey = key.replace(/\s+/g, '').toUpperCase();
         normalizedColumnMapping[normalizedKey] = value;
       }
-      
-      logger.info(`Normalized column mapping: ${JSON.stringify(normalizedColumnMapping)}`);
 
       // Encontrar índices de columnas especiales ANTES del loop
       // Estas columnas se leen directamente desde las celdas para evitar problemas con espacios y caracteres especiales
@@ -147,50 +134,39 @@ export class PayrollBulkUploadService {
           // Buscar columna de egreso primero (más específica)
           if (headerText.includes('ALIMENTACION') && (headerText.includes('DESC') || headerText.includes('EGRESO') || headerText.includes('DEDUCTION'))) {
             alimentacionEgresosIndex = col;
-            logger.info(`Found ALIMENTACION DESC/EGRESO column at index: ${col}`);
           }
           // Buscar columna de ingresos (solo "ALIMENTACION" sin DESC/EGRESO)
           else if (headerText === 'ALIMENTACION') {
             alimentacionIngresosIndex = col;
-            logger.info(`Found ALIMENTACION INGRESOS column at index: ${col}`);
           }
           // Buscar columnas de egresos con espacios
           else if (headerText === 'PRESTAMO IESS') {
             iessLoanIndex = col;
-            logger.info(`Found PRESTAMO IESS column at index: ${col}`);
           }
           else if (headerText === 'PRESTAMO EMPRESARIAL') {
             companyLoanIndex = col;
-            logger.info(`Found PRESTAMO EMPRESARIAL column at index: ${col}`);
           }
           else if (headerText === 'EXTENSION CONYUGAL') {
             spouseExtensionIndex = col;
-            logger.info(`Found EXTENSION CONYUGAL column at index: ${col}`);
           }
           else if (headerText === 'DIAS NO LABORADOS') {
             nonWorkDaysIndex = col;
-            logger.info(`Found DIAS NO LABORADOS column at index: ${col}`);
           }
           else if (headerText === 'OTROS DESCUENTOS') {
             otherDeductionsIndex = col;
-            logger.info(`Found OTROS DESCUENTOS column at index: ${col}`);
           }
           // Buscar columnas de ingresos con espacios
           else if (headerText === 'OTROS INGRESOS') {
             otherIncomeIndex = col;
-            logger.info(`Found OTROS INGRESOS column at index: ${col}`);
           }
           else if (headerText === 'DESCANSO MEDICO') {
             medicalLeaveIndex = col;
-            logger.info(`Found DESCANSO MEDICO column at index: ${col}`);
           }
           else if (headerText === 'VACACIONES') {
             vacationIndex = col;
-            logger.info(`Found VACACIONES column at index: ${col}`);
           }
           else if (headerText.includes('FONDOS') && headerText.includes('RESERVA')) {
             reserveFundsIndex = col;
-            logger.info(`Found FONDOS RESERVA column at index: ${col}`);
           }
         }
       }
@@ -240,12 +216,6 @@ export class PayrollBulkUploadService {
             const normalizedKey = (key as string).replace(/\s+/g, '').toUpperCase();
             normalizedCurrentRow[normalizedKey] = value;
           }
-
-          // Usar mapeo normalizado
-          const mappingToUse = normalizedColumnMapping;
-
-          const totalAlimentacion = alimentacionIngresos + alimentacionEgresos;
-          logger.info(`Row ${rowIndex + 1}: Alimentacion Ingresos=${alimentacionIngresos}, Egresos=${alimentacionEgresos}, Total=${totalAlimentacion}`);
 
           // Mapear datos del archivo a estructura de nómina
           // Normalizar cédula: si tiene 9 dígitos, agregar 0 al inicio
@@ -300,17 +270,6 @@ export class PayrollBulkUploadService {
             status: 'draft',
           };
 
-          // LOG DETALLADO DE DATOS LEÍDOS (solo para debugging, sin logs de error)
-          if (rowIndex < 5 || rowIndex % 50 === 0) {
-            logger.info(`\n========== ROW ${rowIndex + 1} - DEBUG INFO ==========`);
-            logger.info(`Normalized keys (first 15): ${JSON.stringify(Object.keys(normalizedCurrentRow).slice(0, 15))}`);
-            logger.info(`Employee: ${payrollData.employeeName} (${payrollData.cedula})`);
-            logger.info(`Period: ${payrollData.year}/${payrollData.month}`);
-            logger.info(`Ingresos - Sueldo: ${payrollData.baseSalary}, XII: ${payrollData.twelfthSalary}, XIV: ${payrollData.fourteenthSalary}, Fondos: ${payrollData.reserveFunds}, Total: ${payrollData.totalIncome}`);
-            logger.info(`Egresos - IESS: ${payrollData.iessContribution}, Total: ${payrollData.totalDeductions}, A Pagar: ${payrollData.totalToPay}`);
-            logger.info(`========== END ROW ${rowIndex + 1} ==========\n`);
-          }
-
           // Validar datos requeridos
           if (!payrollData.employeeName || !payrollData.cedula || !payrollData.year || !payrollData.month) {
             const missingFields = [];
@@ -338,7 +297,6 @@ export class PayrollBulkUploadService {
               // Se usará el departamento del empleado en su lugar
             } else {
               payrollData.departmentId = department.id;
-              logger.info(`Mapped department name "${payrollData.departmentId}" to ID: ${department.id}`);
             }
           } catch (deptError) {
             logger.error(`Error finding department:`, deptError);
@@ -383,7 +341,6 @@ export class PayrollBulkUploadService {
             const foundInMaestro = !employee && !!maestroRow;
             const resolvedId = employee ? employee.id : maestroRow?.id;
 
-            logger.info(`Looking for employee "${payrollData.employeeName}" (${payrollData.cedula}): Art42=${employee ? 'YES' : 'NO'}, Maestro=${maestroRow ? 'YES' : 'NO'}`);
 
             if (!resolvedId) {
               notFoundEmployees.push({
@@ -392,7 +349,6 @@ export class PayrollBulkUploadService {
                 name: payrollData.employeeName,
               });
               pendingPayrolls.push(payrollData);
-              logger.info(`Payroll for employee ${payrollData.employeeName} saved as pending`);
               continue;
             }
 
@@ -406,10 +362,8 @@ export class PayrollBulkUploadService {
               } else {
                 payrollData.departmentId = employee.departmentId;
               }
-              logger.info(`Using department from ${foundInMaestro ? 'maestro' : 'Art42'}: ${payrollData.departmentId}`);
             }
 
-            logger.info(`Assigned employeeId: ${resolvedId} (source: ${foundInMaestro ? 'maestro_general' : 'Art42'})`);
           } catch (employeeError) {
             logger.error(`Error finding employee by name ${payrollData.employeeName}:`, employeeError);
             errors.push({
@@ -430,7 +384,6 @@ export class PayrollBulkUploadService {
             const db = (await import('@config/database')).getDatabase();
             if (existingPayroll) {
               // Si existe un registro previo, consolidar sumando los valores
-              logger.info(`Found existing payroll for ${payrollData.employeeName} - ${payrollData.year}/${payrollData.month}, consolidating...`);
               
               // Guardar valores previos para el reporte
               const previousValues = {
@@ -490,7 +443,6 @@ export class PayrollBulkUploadService {
               try {
                 const newPayroll = await PayrollRepository.create(consolidatedPayrollData);
                 updatedCount++;
-                logger.info(`Payroll consolidated for ${payrollData.employeeName} - ${payrollData.year}/${payrollData.month}`);
                 processedPayrolls.push(consolidatedPayrollData);
                 
                 // Registrar la consolidación
@@ -528,7 +480,6 @@ export class PayrollBulkUploadService {
               try {
                 const newPayroll = await PayrollRepository.create(payrollData);
                 createdCount++;
-                logger.info(`Payroll created: ${payrollData.cedula} - ${payrollData.year}/${payrollData.month}`);
                 processedPayrolls.push(payrollData);
               } catch (createError) {
                 logger.error(`Error creating payroll at row ${rowIndex + 1}:`, createError);
