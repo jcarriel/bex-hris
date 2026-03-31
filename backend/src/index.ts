@@ -41,6 +41,23 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Middleware
 app.use(helmet());
+// Handle preflight requests explicitly before other middleware
+app.options('*', (req, res) => {
+  const origin = req.headers.origin || '';
+  const isAllowed =
+    !origin ||
+    /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+    origin.endsWith('.vercel.app') ||
+    origin.endsWith('.railway.app') ||
+    (process.env.CORS_ORIGINS || '').split(',').map(o => o.trim()).includes(origin);
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Biometrico-Target,X-Biometrico-Token');
+  }
+  res.sendStatus(204);
+});
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, etc.)
