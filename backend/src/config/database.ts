@@ -736,6 +736,20 @@ async function runMigrations(db: DbAdapter): Promise<void> {
       }
     }
 
+    // Seed default admin role
+    try {
+      const now = new Date().toISOString();
+      const roleExists = await db.get(`SELECT id FROM roles WHERE id = 'role-admin'`);
+      if (!roleExists) {
+        await db.run(
+          `INSERT INTO roles (id, name, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)`,
+          ['role-admin', 'Administrador', 'Rol administrador del sistema', now, now],
+        );
+      }
+    } catch (e) {
+      console.error('Error seeding admin role:', e);
+    }
+
     // Seed default admin user
     try {
       const userCount = await db.get<{ count: string }>(`SELECT COUNT(*) as count FROM users`);
