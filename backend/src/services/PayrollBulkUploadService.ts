@@ -96,6 +96,10 @@ export class PayrollBulkUploadService {
         'PRESTAMO IESS': 'iessLoan',
         'PRESTAMO EMPRESARIAL': 'companyLoan',
         'EXTENSION CONYUGAL': 'spouseExtension',
+        'COMISARIATO PAÑORA': 'commissaryPanora',
+        'COMISARIATO PANORA': 'commissaryPanora',
+        'CAMPAÑA DE LENTES': 'lensCampaign',
+        'CAMPANA DE LENTES': 'lensCampaign',
         'OTROS DESCUENTOS': 'otherDeductions',
         'TOTAL EGRESOS': 'totalDeductions',
         'TOTAL A PAGAR': 'totalToPay',
@@ -121,6 +125,8 @@ export class PayrollBulkUploadService {
       let medicalLeaveIndex: number = -1;
       let vacationIndex: number = -1;
       let reserveFundsIndex: number = -1;
+      let commissaryPanoraIndex: number = -1;
+      let lensCampaignIndex: number = -1;
       
       const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
       
@@ -131,13 +137,19 @@ export class PayrollBulkUploadService {
         if (cell && cell.v) {
           const headerText = String(cell.v).toUpperCase().trim();
           
-          // Buscar columna de egreso primero (más específica)
+          // ALIMENTACION aparece dos veces en el Excel (ingreso y egreso).
+          // 1) Si trae sufijo explícito (DESC/EGRESO/DEDUCTION) → egreso, sin ambigüedad.
+          // 2) Si es "ALIMENTACION" pelado → la primera ocurrencia es ingreso y la
+          //    segunda es egreso, según el orden de las columnas en la hoja.
           if (headerText.includes('ALIMENTACION') && (headerText.includes('DESC') || headerText.includes('EGRESO') || headerText.includes('DEDUCTION'))) {
             alimentacionEgresosIndex = col;
           }
-          // Buscar columna de ingresos (solo "ALIMENTACION" sin DESC/EGRESO)
           else if (headerText === 'ALIMENTACION') {
-            alimentacionIngresosIndex = col;
+            if (alimentacionIngresosIndex === -1) {
+              alimentacionIngresosIndex = col;
+            } else if (alimentacionEgresosIndex === -1) {
+              alimentacionEgresosIndex = col;
+            }
           }
           // Buscar columnas de egresos con espacios
           else if (headerText === 'PRESTAMO IESS') {
@@ -168,6 +180,13 @@ export class PayrollBulkUploadService {
           else if (headerText.includes('FONDOS') && headerText.includes('RESERVA')) {
             reserveFundsIndex = col;
           }
+          // Nuevas columnas de descuentos
+          else if (headerText.includes('COMISARIATO') && (headerText.includes('PAÑORA') || headerText.includes('PANORA'))) {
+            commissaryPanoraIndex = col;
+          }
+          else if (headerText.includes('CAMPA') && headerText.includes('LENTES')) {
+            lensCampaignIndex = col;
+          }
         }
       }
       
@@ -189,6 +208,8 @@ export class PayrollBulkUploadService {
           let medicalLeaveValue = 0;
           let vacationValue = 0;
           let reserveFundsValue = 0;
+          let commissaryPanoraValue = 0;
+          let lensCampaignValue = 0;
           
           const readCellValue = (colIndex: number): number => {
             if (colIndex < 0) return 0;
@@ -209,6 +230,8 @@ export class PayrollBulkUploadService {
           medicalLeaveValue = readCellValue(medicalLeaveIndex);
           vacationValue = readCellValue(vacationIndex);
           reserveFundsValue = readCellValue(reserveFundsIndex);
+          commissaryPanoraValue = readCellValue(commissaryPanoraIndex);
+          lensCampaignValue = readCellValue(lensCampaignIndex);
 
           // Normalizar la fila actual: remover espacios de todas las claves
           const normalizedCurrentRow: { [key: string]: any } = {};
@@ -264,6 +287,8 @@ export class PayrollBulkUploadService {
             companyLoan: companyLoanValue, // Leído directamente desde la celda del worksheet
             spouseExtension: spouseExtensionValue, // Leído directamente desde la celda del worksheet
             foodDeduction: alimentacionEgresos, // ALIMENTACION de egresos (descuento)
+            commissaryPanora: commissaryPanoraValue, // COMISARIATO PAÑORA — leído directamente desde la celda
+            lensCampaign: lensCampaignValue, // CAMPAÑA DE LENTES — leído directamente desde la celda
             otherDeductions: otherDeductionsValue, // Leído directamente desde la celda del worksheet
             totalDeductions: this.getNumberFromNormalized(normalizedCurrentRow, 'TOTALEGRESOS'),
             totalToPay: this.getNumberFromNormalized(normalizedCurrentRow, 'TOTALAPAGAR'),
@@ -383,9 +408,10 @@ export class PayrollBulkUploadService {
           try {
             const db = (await import('@config/database')).getDatabase();
             if (existingPayroll) {
-              // Si existe un registro previo, consolidar sumando los valores
-              
-              // Guardar valores previos para el reporte
+              // Si existe un registro previo del mismo empleado/período, reemplazarlo
+              // con los valores del Excel (no se acumula).
+
+              // Guardar valores previos solo para el reporte
               const previousValues = {
                 baseSalary: existingPayroll.baseSalary,
                 workDays: existingPayroll.workDays,
@@ -395,39 +421,7 @@ export class PayrollBulkUploadService {
                 totalDeductions: existingPayroll.totalDeductions,
                 totalToPay: existingPayroll.totalToPay,
               };
-              
-              // Sumar valores numéricos
-              const consolidatedPayrollData = {
-                ...payrollData,
-                baseSalary: (existingPayroll.baseSalary || 0) + (payrollData.baseSalary || 0),
-                workDays: (existingPayroll.workDays || 0) + (payrollData.workDays || 0),
-                overtimeHours50: (existingPayroll.overtimeHours50 || 0) + (payrollData.overtimeHours50 || 0),
-                earnedSalary: (existingPayroll.earnedSalary || 0) + (payrollData.earnedSalary || 0),
-                responsibilityBonus: (existingPayroll.responsibilityBonus || 0) + (payrollData.responsibilityBonus || 0),
-                productivityBonus: (existingPayroll.productivityBonus || 0) + (payrollData.productivityBonus || 0),
-                foodAllowance: (existingPayroll.foodAllowance || 0) + (payrollData.foodAllowance || 0),
-                overtimeValue50: (existingPayroll.overtimeValue50 || 0) + (payrollData.overtimeValue50 || 0),
-                otherIncome: (existingPayroll.otherIncome || 0) + (payrollData.otherIncome || 0),
-                medicalLeave: (existingPayroll.medicalLeave || 0) + (payrollData.medicalLeave || 0),
-                twelfthSalary: (existingPayroll.twelfthSalary || 0) + (payrollData.twelfthSalary || 0),
-                fourteenthSalary: (existingPayroll.fourteenthSalary || 0) + (payrollData.fourteenthSalary || 0),
-                totalIncome: (existingPayroll.totalIncome || 0) + (payrollData.totalIncome || 0),
-                vacation: (existingPayroll.vacation || 0) + (payrollData.vacation || 0),
-                reserveFunds: (existingPayroll.reserveFunds || 0) + (payrollData.reserveFunds || 0),
-                totalBenefits: (existingPayroll.totalBenefits || 0) + (payrollData.totalBenefits || 0),
-                iessContribution: (existingPayroll.iessContribution || 0) + (payrollData.iessContribution || 0),
-                advance: (existingPayroll.advance || 0) + (payrollData.advance || 0),
-                nonWorkDays: (existingPayroll.nonWorkDays || 0) + (payrollData.nonWorkDays || 0),
-                incomeTax: (existingPayroll.incomeTax || 0) + (payrollData.incomeTax || 0),
-                iessLoan: (existingPayroll.iessLoan || 0) + (payrollData.iessLoan || 0),
-                companyLoan: (existingPayroll.companyLoan || 0) + (payrollData.companyLoan || 0),
-                spouseExtension: (existingPayroll.spouseExtension || 0) + (payrollData.spouseExtension || 0),
-                foodDeduction: (existingPayroll.foodDeduction || 0) + (payrollData.foodDeduction || 0),
-                otherDeductions: (existingPayroll.otherDeductions || 0) + (payrollData.otherDeductions || 0),
-                totalDeductions: (existingPayroll.totalDeductions || 0) + (payrollData.totalDeductions || 0),
-                totalToPay: (existingPayroll.totalToPay || 0) + (payrollData.totalToPay || 0),
-              };
-              
+
               // Eliminar el registro anterior
               try {
                 await db.run(
@@ -438,41 +432,34 @@ export class PayrollBulkUploadService {
                 logger.error(`Error deleting existing payroll at row ${rowIndex + 1}:`, deleteError);
                 throw deleteError;
               }
-              
-              // Crear la nómina consolidada
+
+              // Crear la nómina con los valores nuevos (reemplazo)
               try {
-                const newPayroll = await PayrollRepository.create(consolidatedPayrollData);
+                await PayrollRepository.create(payrollData);
                 updatedCount++;
-                processedPayrolls.push(consolidatedPayrollData);
-                
-                // Registrar la consolidación
+                processedPayrolls.push(payrollData);
+
+                const newValues = {
+                  baseSalary: payrollData.baseSalary,
+                  workDays: payrollData.workDays,
+                  overtimeHours50: payrollData.overtimeHours50,
+                  earnedSalary: payrollData.earnedSalary,
+                  totalIncome: payrollData.totalIncome,
+                  totalDeductions: payrollData.totalDeductions,
+                  totalToPay: payrollData.totalToPay,
+                };
+
                 consolidatedPayrolls.push({
                   name: payrollData.employeeName,
                   cedula: payrollData.cedula,
                   year: payrollData.year,
                   month: payrollData.month,
                   previousValues,
-                  newValues: {
-                    baseSalary: payrollData.baseSalary,
-                    workDays: payrollData.workDays,
-                    overtimeHours50: payrollData.overtimeHours50,
-                    earnedSalary: payrollData.earnedSalary,
-                    totalIncome: payrollData.totalIncome,
-                    totalDeductions: payrollData.totalDeductions,
-                    totalToPay: payrollData.totalToPay,
-                  },
-                  consolidatedValues: {
-                    baseSalary: consolidatedPayrollData.baseSalary,
-                    workDays: consolidatedPayrollData.workDays,
-                    overtimeHours50: consolidatedPayrollData.overtimeHours50,
-                    earnedSalary: consolidatedPayrollData.earnedSalary,
-                    totalIncome: consolidatedPayrollData.totalIncome,
-                    totalDeductions: consolidatedPayrollData.totalDeductions,
-                    totalToPay: consolidatedPayrollData.totalToPay,
-                  },
+                  newValues,
+                  consolidatedValues: newValues,
                 });
               } catch (createError) {
-                logger.error(`Error creating consolidated payroll at row ${rowIndex + 1}:`, createError);
+                logger.error(`Error replacing payroll at row ${rowIndex + 1}:`, createError);
                 throw createError;
               }
             } else {

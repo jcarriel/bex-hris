@@ -47,7 +47,8 @@ const KNOWN_COLUMNS: string[] = [
   'medicalLeave', 'twelfthSalary', 'fourteenthSalary', 'totalIncome',
   'reserveFunds', 'totalBenefits', 'iessContribution', 'nonWorkDays',
   'incomeTax', 'iessLoan', 'companyLoan', 'spouseExtension',
-  'foodDeduction', 'otherDeductions', 'totalDeductions', 'totalToPay',
+  'foodDeduction', 'commissaryPanora', 'lensCampaign',
+  'otherDeductions', 'totalDeductions', 'totalToPay',
   // attendance
   'checkIn', 'checkOut',
   // marcacion
@@ -139,9 +140,12 @@ export async function initializeDatabase(): Promise<DbAdapter> {
   const dbUrl = process.env.DATABASE_URL;
   if (dbUrl && !dbUrl.includes('railway.internal') && !dbUrl.includes('${{')) {
     console.log('Database: usando DATABASE_URL');
+    // Activar SSL si NODE_ENV=production o si el host es un proxy de Railway
+    const isRailwayHost = /rlwy\.net|railway\.app/.test(dbUrl);
+    const useSsl = process.env.NODE_ENV === 'production' || isRailwayHost;
     cfg = {
       connectionString: dbUrl,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
       max: 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
@@ -389,17 +393,20 @@ async function createTables(db: DbAdapter): Promise<void> {
       companyLoan REAL DEFAULT 0,
       spouseExtension REAL DEFAULT 0,
       foodDeduction REAL DEFAULT 0,
+      commissaryPanora REAL DEFAULT 0,
+      lensCampaign REAL DEFAULT 0,
       otherDeductions REAL DEFAULT 0,
       totalDeductions REAL DEFAULT 0,
       totalToPay REAL DEFAULT 0,
       status TEXT NOT NULL,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
-      FOREIGN KEY (employeeId) REFERENCES employees(id),
       FOREIGN KEY (departmentId) REFERENCES centros_costo(id),
       UNIQUE(employeeId, year, month)
     )
   `);
+  // Nota: no se define FK sobre payroll.employeeId porque el sistema acepta
+  // empleados desde dos fuentes (employees y maestro_general).
 
   // Attendance
   await db.exec(`
@@ -797,7 +804,9 @@ async function runMigrations(db: DbAdapter): Promise<void> {
       ['employees', 'contratoActualId', 'TEXT'],
       ['employees', 'afiliacionId',     'TEXT'],
       // payroll
-      ['payroll', 'quincena', 'REAL DEFAULT 0'],
+      ['payroll', 'quincena',         'REAL DEFAULT 0'],
+      ['payroll', 'commissaryPanora', 'REAL DEFAULT 0'],
+      ['payroll', 'lensCampaign',     'REAL DEFAULT 0'],
       // departmentScheduleConfig
       ['departmentScheduleConfig', 'positionId', 'TEXT'],
       ['departmentScheduleConfig', 'workHours',  'REAL DEFAULT 9'],
@@ -824,6 +833,20 @@ async function runMigrations(db: DbAdapter): Promise<void> {
         if (!e.message?.includes('already exists')) {
           console.error(`Migration warning — ALTER TABLE ${table} ADD COLUMN ${col}:`, e.message);
         }
+      }
+    }
+
+    // Drop legacy FK constraints that conflict with current logic.
+    // payroll.employeeId may reference either employees(id) or maestro_general(id),
+    // so we cannot constrain it to employees(id).
+    const dropConstraints: [table: string, constraint: string][] = [
+      ['payroll', 'payroll_employeeid_fkey'],
+    ];
+    for (const [table, constraint] of dropConstraints) {
+      try {
+        await db.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${constraint}`);
+      } catch (e: any) {
+        console.error(`Migration warning — DROP CONSTRAINT ${constraint} on ${table}:`, e.message);
       }
     }
 

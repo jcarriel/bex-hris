@@ -41,6 +41,8 @@ export interface PayrollRecord {
   companyLoan: number
   spouseExtension: number
   foodDeduction: number
+  commissaryPanora: number
+  lensCampaign: number
   otherDeductions: number
   totalDeductions: number
   // Total

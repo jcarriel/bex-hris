@@ -13,7 +13,8 @@ export class PayrollRepository {
       'paymentMethod', 'accountNumber', 'baseSalary', 'workDays', 'overtimeHours50', 'earnedSalary', 'responsibilityBonus',
       'productivityBonus', 'foodAllowance', 'overtimeValue50', 'otherIncome', 'medicalLeave', 'twelfthSalary', 'fourteenthSalary',
       'totalIncome', 'vacation', 'reserveFunds', 'totalBenefits', 'quincena', 'iessContribution', 'advance', 'nonWorkDays', 'incomeTax',
-      'iessLoan', 'companyLoan', 'spouseExtension', 'foodDeduction', 'otherDeductions', 'totalDeductions', 'totalToPay',
+      'iessLoan', 'companyLoan', 'spouseExtension', 'foodDeduction', 'commissaryPanora', 'lensCampaign',
+      'otherDeductions', 'totalDeductions', 'totalToPay',
       'status', 'createdAt', 'updatedAt'
     ];
 
@@ -24,7 +25,8 @@ export class PayrollRepository {
       payroll.productivityBonus, payroll.foodAllowance, payroll.overtimeValue50, payroll.otherIncome, payroll.medicalLeave,
       payroll.twelfthSalary, payroll.fourteenthSalary, payroll.totalIncome, payroll.vacation, payroll.reserveFunds,
       payroll.totalBenefits, payroll.quincena, payroll.iessContribution, payroll.advance, payroll.nonWorkDays, payroll.incomeTax,
-      payroll.iessLoan, payroll.companyLoan, payroll.spouseExtension, payroll.foodDeduction, payroll.otherDeductions,
+      payroll.iessLoan, payroll.companyLoan, payroll.spouseExtension, payroll.foodDeduction,
+      payroll.commissaryPanora, payroll.lensCampaign, payroll.otherDeductions,
       payroll.totalDeductions, payroll.totalToPay, payroll.status, now, now
     ];
 

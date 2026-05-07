@@ -544,6 +544,7 @@ function RolesTab() {
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['roles'] })
       setSelected(updated)
+      setPermissions(updated.permissions)
       setDirty(false)
     },
   })
@@ -573,6 +574,16 @@ function RolesTab() {
     setDirty(false)
     setCreating(false)
   }
+
+  // Keep selected role and permissions in sync when the roles query refreshes
+  useEffect(() => {
+    if (!selected || dirty) return
+    const fresh = roles.find((r) => r.id === selected.id)
+    if (fresh) {
+      setSelected(fresh)
+      setPermissions(fresh.permissions)
+    }
+  }, [roles]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePermission = (moduleId: string) => {
     if (selected?.isSystem) return

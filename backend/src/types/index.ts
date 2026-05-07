@@ -134,6 +134,8 @@ export interface Payroll {
   companyLoan: number; // PRESTAMO EMPRESARIAL
   spouseExtension: number; // EXTENSION CONYUGAL
   foodDeduction: number; // ALIMENTACION (descuento)
+  commissaryPanora: number; // COMISARIATO PAÑORA
+  lensCampaign: number; // CAMPAÑA DE LENTES
   otherDeductions: number; // OTROS DESCUENTOS
   totalDeductions: number; // TOTAL EGRESOS
   

@@ -55,7 +55,9 @@ function calcTotals(r: PayrollRecord) {
     (r.spouseExtension    ?? 0) +
     (r.nonWorkDays        ?? 0) +
     (r.otherDeductions    ?? 0) +
-    (r.foodDeduction      ?? 0)
+    (r.foodDeduction      ?? 0) +
+    (r.commissaryPanora   ?? 0) +
+    (r.lensCampaign       ?? 0)
 
   return {
     totalIncome,
@@ -98,6 +100,8 @@ function buildRolHtml(r: PayrollRecord, company: CompanySettings = { name: COMPA
     { label: 'Extensión Conyugal',  value: r.spouseExtension  ?? 0 },
     { label: 'Días No Laborados',   value: r.nonWorkDays      ?? 0 },
     { label: 'Alimentación',        value: r.foodDeduction    ?? 0 },
+    { label: 'Comisariato Pañora',  value: r.commissaryPanora ?? 0 },
+    { label: 'Campaña de Lentes',   value: r.lensCampaign     ?? 0 },
     { label: 'Otros Descuentos',    value: r.otherDeductions  ?? 0 },
   ].filter(i => i.value > 0)
 
@@ -382,6 +386,8 @@ function RolDePagos({ record, onClose }: { record: PayrollRecord; onClose: () =>
             ['Extensión Conyugal',  record.spouseExtension],
             ['Días No Laborados',   record.nonWorkDays],
             ['Alimentación (desc.)',record.foodDeduction],
+            ['Comisariato Pañora',  record.commissaryPanora],
+            ['Campaña de Lentes',   record.lensCampaign],
             ['Otros Descuentos',    record.otherDeductions],
           ])}
           <div className="flex justify-between items-center px-4 py-2 text-xs font-bold"

@@ -67,7 +67,6 @@
   "unregisteredUserReport": "http://localhost:8081/att/api/unregisteredUserReport/"
 }
 
-
 {
   "terminals": "http://localhost:8081/iclock/api/terminals/",
   "transactions": "http://localhost:8081/iclock/api/transactions/",
@@ -111,83 +110,6 @@
       "hire_date": null,
       "dept_name": "Department",
       "department": 1,
-      "position": 1,
-      "position_name": "Position"
-    },
-    {
-      "id": "9013346404860",
-      "emp_code": "1003736541",
-      "first_name": "ESPINOZA GODOY ALEX FERNANDO",
-      "last_name": null,
-      "hire_date": null,
-      "dept_name": "NO IDENTIFICADO",
-      "department": 15,
-      "position": 1,
-      "position_name": "Position"
-    },
-    {
-      "id": "9306456693653",
-      "emp_code": "1008",
-      "first_name": "",
-      "last_name": null,
-      "hire_date": null,
-      "dept_name": "Department",
-      "department": 1,
-      "position": 1,
-      "position_name": "Position"
-    },
-    {
-      "id": "8644036466604",
-      "emp_code": "102731130",
-      "first_name": "CONDO GUACHUN NESTOR ROMAN",
-      "last_name": null,
-      "hire_date": null,
-      "dept_name": "SEGURIDAD",
-      "department": 9,
-      "position": 1,
-      "position_name": "Position"
-    },
-    {
-      "id": "0960432279576",
-      "emp_code": "103377671",
-      "first_name": "",
-      "last_name": null,
-      "hire_date": null,
-      "dept_name": "Department",
-      "department": 1,
-      "position": 1,
-      "position_name": "Position"
-    },
-    {
-      "id": "9306543984722",
-      "emp_code": "1033776714",
-      "first_name": "RODRIGUEZ PEÑA BRIAM SLEIDER",
-      "last_name": null,
-      "hire_date": null,
-      "dept_name": "CONTRATISTA LUCIO",
-      "department": 3023,
-      "position": 1,
-      "position_name": "Position"
-    },
-    {
-      "id": "8765670163197",
-      "emp_code": "103576807",
-      "first_name": "CUMBE ENCALADA VICENTE OLMEDO",
-      "last_name": null,
-      "hire_date": null,
-      "dept_name": "EMPAQUE AFILIADO",
-      "department": 3,
-      "position": 1,
-      "position_name": "Position"
-    },
-    {
-      "id": "902666069475",
-      "emp_code": "103655411",
-      "first_name": "ANDRADE FLORES ANIBAL PATRICIO",
-      "last_name": null,
-      "hire_date": null,
-      "dept_name": "EMPAQUE AFILIADO",
-      "department": 3,
       "position": 1,
       "position_name": "Position"
     },
