@@ -364,17 +364,81 @@ export class PayrollBulkUploadService {
             }
 
             const foundInMaestro = !employee && !!maestroRow;
-            const resolvedId = employee ? employee.id : maestroRow?.id;
+            let resolvedId = employee ? employee.id : maestroRow?.id;
 
-
+            // 5) Si no se encontró en ninguna fuente, auto-crear depto/cargo/empleado
+            //    con los datos del Excel y seguir con la nómina en el mismo flujo.
+            //    Mismo patrón que BulkUploadService para empleados.
             if (!resolvedId) {
-              notFoundEmployees.push({
-                row: rowIndex + 1,
-                cedula: payrollData.cedula,
-                name: payrollData.employeeName,
-              });
-              pendingPayrolls.push(payrollData);
-              continue;
+              try {
+                const DepartmentService = (await import('@services/DepartmentService')).default;
+                const PositionService = (await import('@services/PositionService')).default;
+
+                // Resolver/crear departamento por nombre del Excel
+                const deptNameRaw = this.getStringFromNormalized(normalizedCurrentRow, 'CENTRODECOSTO');
+                const deptName = (deptNameRaw || 'SIN DEPARTAMENTO').toUpperCase();
+                const allDepartments = await DepartmentService.getAllDepartments();
+                let department = allDepartments.find((d: any) =>
+                  d.name && d.name.toUpperCase() === deptName
+                );
+                if (!department) {
+                  department = await DepartmentService.createDepartment(deptName, '');
+                  logger.info(`Auto-created department during payroll upload: ${deptName}`);
+                }
+                const autoDeptId = department.id;
+
+                // Resolver/crear cargo (debe pertenecer al departamento correcto)
+                const cargoNameRaw = (payrollData.position || '').trim();
+                const cargoName = (cargoNameRaw || 'SIN CARGO').toUpperCase();
+                const allPositions = await PositionService.getAllPositions();
+                let position = allPositions.find((p: any) =>
+                  p.name && p.name.toUpperCase() === cargoName && p.departmentId === autoDeptId
+                );
+                if (!position) {
+                  position = await PositionService.createPosition(cargoName, autoDeptId, '', 0, 0);
+                  logger.info(`Auto-created position during payroll upload: ${cargoName} (dept ${deptName})`);
+                }
+                const autoPositionId = position.id;
+
+                // Parsear nombre: primera palabra → apellido, resto → nombres
+                const nameParts = payrollData.employeeName.trim().split(/\s+/);
+                const autoLastName = nameParts[0] || 'SIN APELLIDO';
+                const autoFirstName = nameParts.slice(1).join(' ') || 'SIN NOMBRE';
+
+                const EmployeeService = (await import('@services/EmployeeService')).default;
+                const newEmployee = await EmployeeService.createEmployee({
+                  firstName: autoFirstName,
+                  lastName: autoLastName,
+                  cedula: payrollData.cedula,
+                  departmentId: autoDeptId,
+                  positionId: autoPositionId,
+                  hireDate: new Date().toISOString().split('T')[0],
+                  baseSalary: payrollData.baseSalary || 0,
+                  bankAccount: payrollData.accountNumber || '',
+                  bankName: payrollData.paymentMethod || '',
+                  status: 'active',
+                  contratoTipo: '',
+                } as any);
+
+                resolvedId = newEmployee.id;
+                payrollData.departmentId = autoDeptId;
+                logger.info(
+                  `Auto-created employee during payroll upload: ${newEmployee.cedula} ` +
+                  `(${newEmployee.firstName} ${newEmployee.lastName})`
+                );
+              } catch (autoCreateError) {
+                logger.error(
+                  `Error auto-creating employee at row ${rowIndex + 1}:`,
+                  autoCreateError
+                );
+                notFoundEmployees.push({
+                  row: rowIndex + 1,
+                  cedula: payrollData.cedula,
+                  name: payrollData.employeeName,
+                });
+                pendingPayrolls.push(payrollData);
+                continue;
+              }
             }
 
             // Asignar employeeId
@@ -384,7 +448,7 @@ export class PayrollBulkUploadService {
             if (!payrollData.departmentId || payrollData.departmentId.length < 20) {
               if (foundInMaestro) {
                 payrollData.departmentId = maestroRow.centroDeCostoId ?? '';
-              } else {
+              } else if (employee) {
                 payrollData.departmentId = employee.departmentId;
               }
             }
